@@ -153,8 +153,6 @@ const DreamDetail = () => {
       }
     };
 
-  };
-
   const handleAddComment = async () => {
     if (!currentUser || !dreamId || !newComment.trim()) return;
     
@@ -212,10 +210,11 @@ const DreamDetail = () => {
         <Card className="overflow-hidden border border-border/50 bg-background/95 backdrop-blur-sm">
           <CardHeader className="p-6">
             <div className="flex items-center gap-3 mb-4">
-              <Avatar className="h-10 w-10 border border-border">
-                <AvatarImage src={dream.userAvatar || undefined} />
-                <AvatarFallback>{dream.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
+            <Avatar className="h-8 w-8">
+  <AvatarImage src={dream.userAvatar || undefined} />
+  <AvatarFallback>{dream.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+</Avatar>
+
               <div className="flex flex-col">
                 <span className="text-sm font-medium">
                   <a
@@ -359,7 +358,6 @@ const DreamDetail = () => {
                         <>
                           <AvatarImage src={comment.userAvatar || undefined} />
                           <AvatarFallback>{comment.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </>
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex justify-between items-center">
@@ -385,3 +383,70 @@ const DreamDetail = () => {
 };
 
 export default DreamDetail;
+
+const fetchDreamAndComments = async () => {
+  if (!dreamId) return;
+
+  try {
+    const dreamDocRef = doc(db, "dreams", dreamId);
+    const dreamDoc = await getDoc(dreamDocRef);
+
+    if (dreamDoc.exists()) {
+      const dreamData = dreamDoc.data();
+
+      // Check if the dream is private and user is not the owner
+      if (dreamData.isPrivate && dreamData.userId !== currentUser?.uid) {
+        toast.error("Bu rüya özel olarak ayarlanmış.", { position: 'top-center' });
+        setLoading(false);
+        return;
+      }
+
+      setDream({
+        id: dreamDoc.id,
+        title: dreamData.title,
+        content: dreamData.content,
+        createdAt: new Date(dreamData.createdAt.toDate()).toLocaleDateString("tr-TR"),
+        isPrivate: dreamData.isPrivate,
+        userId: dreamData.userId,
+        userName: dreamData.userName,
+        userAvatar: dreamData.userAvatar,
+        userUsername: dreamData.userUsername || null,
+        likes: dreamData.likes || 0,
+        comments: dreamData.comments || 0
+      });
+
+      // Set up comments listener
+      const commentsQuery = query(
+        collection(db, "comments"),
+        where("dreamId", "==", dreamId),
+        orderBy("createdAt", "desc")
+      );
+
+      const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
+        const commentsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            text: data.text,
+            createdAt: new Date(data.createdAt.toDate()).toLocaleDateString("tr-TR"),
+            userId: data.userId,
+            userName: data.userName,
+            userAvatar: data.userAvatar
+          };
+        });
+
+        setComments(commentsData);
+      });
+
+      return unsubscribe;
+    } else {
+      toast.error("Rüya bulunamadı.", { position: 'top-center' });
+    }
+  } catch (error) {
+    console.error("Dream fetch error:", error);
+    toast.error("Rüya yüklenirken bir hata oluştu.", { position: 'top-center' });
+  } finally {
+    setLoading(false);
+  }
+};
+
