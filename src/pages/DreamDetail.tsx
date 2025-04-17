@@ -45,6 +45,18 @@ const DreamDetail = () => {
   const shouldShowDialog = () => localStorage.getItem("hideDeleteDreamDialog") !== "1";
   const { dreamId } = useParams<{ dreamId: string }>();
   const navigate = useNavigate();
+  
+  // URL'den rüya kimliğini kontrol et
+  useEffect(() => {
+    if (!dreamId) {
+      toast.error("Geçersiz rüya kimliği.", { position: 'top-center' });
+      navigate('/');
+      return;
+    }
+
+    // Geçerli bir rüya kimliği varsa veriyi çek
+    fetchDreamAndComments();
+  }, [dreamId, navigate]);
   const [dream, setDream] = useState<Dream | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -75,8 +87,7 @@ const DreamDetail = () => {
     setTimeout(() => setShared(false), 2000);
   };
 
-  useEffect(() => {
-    const fetchDreamAndComments = async () => {
+  const fetchDreamAndComments = async () => {
       if (!dreamId) return;
 
       try {
@@ -142,8 +153,7 @@ const DreamDetail = () => {
       }
     };
 
-    fetchDreamAndComments();
-  }, [dreamId, currentUser]);
+  };
 
   const handleAddComment = async () => {
     if (!currentUser || !dreamId || !newComment.trim()) return;
