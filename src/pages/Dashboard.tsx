@@ -88,9 +88,9 @@ const Dashboard = () => {
             ) : myDreams.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.map((dream) => (
-                  <Link to={`/dream/${dream.id}`} key={dream.id}>
+                  <div key={dream.id}>
                     <DreamCard dream={dream} />
-                  </Link>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -108,7 +108,9 @@ const Dashboard = () => {
             ) : myDreams.filter(d => !d.isPrivate).length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.filter(d => !d.isPrivate).map((dream) => (
-                  <DreamCard key={dream.id} dream={dream} />
+                  <div key={dream.id}>
+                    <DreamCard dream={dream} />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -126,7 +128,9 @@ const Dashboard = () => {
             ) : myDreams.filter(d => d.isPrivate).length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.filter(d => d.isPrivate).map((dream) => (
-                  <DreamCard key={dream.id} dream={dream} />
+                  <div key={dream.id}>
+                    <DreamCard dream={dream} />
+                  </div>
                 ))}
               </div>
             ) : (

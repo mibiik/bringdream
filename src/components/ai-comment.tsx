@@ -221,7 +221,7 @@ export function AIComment({ dreamId, dreamContent, onNewAIComment }: AICommentPr
         </div>
       )}
       {aiComment && (
-        <AIPopup comment={aiComment} />
+        <AIPopup comment={aiComment} open={!!aiComment} onClose={() => setAIComment(null)} />
       )}
       {/* Alt kısımda Geri butonu kaldırıldı. */}
     </div>

@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 
@@ -16,13 +16,18 @@ interface AIPopupProps {
 export function AIPopup({ comment, open, onClose }: AIPopupProps) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" aria-describedby="dialog-description">
+        <DialogTitle className="sr-only">Yapay Zeka Yorumu</DialogTitle>
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <span className="font-semibold text-lg">Yapay Zeka Yorumu</span>
         </div>
-        <div className="text-base whitespace-pre-line" style={{ maxHeight: '40vh', overflowY: 'auto' }}
-             dangerouslySetInnerHTML={{ __html: renderBold(comment) }} />
+        <div 
+          id="dialog-description"
+          className="text-base whitespace-pre-line" 
+          style={{ maxHeight: '40vh', overflowY: 'auto' }}
+          dangerouslySetInnerHTML={{ __html: renderBold(comment) }} 
+        />
       </DialogContent>
     </Dialog>
   );
