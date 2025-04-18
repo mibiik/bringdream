@@ -119,17 +119,6 @@ const Index = () => {
   const [dailyInspiration, setDailyInspiration] = useState("");
   const [dreamInterpretation, setDreamInterpretation] = useState("");
   
-  const handleRefreshDream = async () => {
-    try {
-      const newInterpretation = await generateDreamInterpretation();
-      setDreamInterpretation(newInterpretation);
-      toast.success("Rüya yorumu yenilendi!");
-    } catch (error) {
-      console.error("Rüya yorumu yenilenirken hata:", error);
-      toast.error("Rüya yorumu yenilenirken bir hata oluştu.");
-    }
-  };
-
   // Animasyon için ref'ler
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
@@ -142,7 +131,7 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const fetchDailyInspiration = async () => {
+    const fetchDreamExample = async () => {
       try {
         const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
           method: "POST",
@@ -152,17 +141,25 @@ const Index = () => {
           body: JSON.stringify({
             contents: [{
               parts: [{
-                text: "Bana ilham verici bir rüya sözü söyle. Kısa ve özlü olsun, 1-2 cümleyi geçmesin."
+                text: "Bana rastgele bir rüya örneği ver. Örneğin 'Bu sabah rüyamda...' şeklinde başlasın. 1-2 cümleyi geçmesin."
               }]
             }]
           }),
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          setDailyInspiration(data.candidates[0].content.parts[0].text);
+          setDreamInterpretation(data.candidates[0].content.parts[0].text);
+        } else {
+          setDreamInterpretation("Bu sabah rüyamda... (Örnek rüya)");
         }
       } catch (error) {
-        console.error("Daily inspiration fetch error:", error);
+        console.error("Dream example fetch error:", error);
+        setDreamInterpretation("Bu sabah rüyamda... (Örnek rüya)");
       }
     };
 
@@ -176,17 +173,25 @@ const Index = () => {
           body: JSON.stringify({
             contents: [{
               parts: [{
-                text: "Rastgele bir rüya örneği ver ve bu rüyayı yorumla. Önce rüyayı anlat, sonra yorumunu yap. 3-4 cümleyi geçmesin."
+                text: "Verilen bir rüyayı yorumla. Yorumun kısa ve açıklayıcı olsun. 1-2 cümleyi geçmesin."
               }]
             }]
           }),
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          setDreamInterpretation(data.candidates[0].content.parts[0].text);
+          setDailyInspiration(data.candidates[0].content.parts[0].text);
+        } else {
+          setDailyInspiration("Rüya yorumu burada görünecek... (Örnek yorum)");
         }
       } catch (error) {
         console.error("Dream interpretation fetch error:", error);
+        setDailyInspiration("Rüya yorumu burada görünecek... (Örnek yorum)");
       } finally {
         setLoading(false);
       }
@@ -280,6 +285,13 @@ const Index = () => {
 
   const handleDeleteDream = (id) => {
     setMyDreams((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const handleRefreshDream = async () => {
+    setLoading(true);
+    await fetchDailyInspiration();
+    await fetchDreamInterpretation();
+    setLoading(false);
   };
 
   return (
@@ -398,20 +410,13 @@ const Index = () => {
               <div className="absolute -top-4 -right-4 bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg cursor-pointer" onClick={handleRefreshDream}>
                 Yenile
               </div>
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#1e355d] to-[#4fc3f7] flex items-center justify-center text-white">
-                  <Brain size={20} />
-                </div>
-                <h3 className="ml-3 text-xl font-bold text-[#1e355d]">Rüya Asistanı</h3>
+              <div className="bg-white p-3 rounded-lg border border-blue-100 mb-4">
+                <p className="text-[#1e355d] font-bold italic">Rüya</p>
+                <p className="text-[#2a406c]">{dreamInterpretation || "Bu sabah rüyamda..."}</p>
               </div>
-              <p className="text-[#2a406c] mb-4">{dreamInterpretation || "Dün gece uçtuğumu ve yüksek bir dağın üzerinde süzüldüğümü gördüm..."}</p>
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                <p className="text-[#1e355d] font-medium">Rüyanız özgürlük ve yeni bakış açıları kazanma arzunuzu yansıtıyor. Yükseklik, hayatınızdaki geniş perspektifi temsil ediyor.</p>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <Badge className="bg-gradient-to-r from-[#1e355d] to-[#4fc3f7]">
-                  <Sparkles className="mr-1 h-3 w-3" /> AI Yorumu
-                </Badge>
+              <div className="bg-white p-3 rounded-lg border border-blue-100">
+                <p className="text-[#1e355d] font-bold italic">Yorum</p>
+                <p className="text-[#1e355d] font-medium">{dailyInspiration || "Rüya yorumu burada görünecek..."}</p>
               </div>
             </div>
           </motion.div>

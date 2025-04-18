@@ -6,12 +6,12 @@ import { collection, query, where, orderBy, onSnapshot, addDoc, getDocs, doc, ge
 import { db, storage } from "@/lib/firebase";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, User, Send, ArrowLeft } from "lucide-react";
+import { Loader2, User, Send, ArrowLeft, Image as ImageIcon, MessageSquare } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatMessage {
   id: string;
@@ -240,37 +240,49 @@ const Messages = () => {
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : contacts.length > 0 ? (
-                <div className="space-y-2 overflow-y-auto max-h-[calc(80vh-12rem)]">
-                  {contacts.map((contact) => (
-                    <div 
-                      key={contact.id}
-                      onClick={() => handleSelectContact(contact)}
-                      className={`p-2 rounded-md flex items-center gap-3 cursor-pointer transition-colors ${
-                        selectedContact?.id === contact.id ? "bg-secondary" : "hover:bg-secondary/50"
-                      }`}
-                    >
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={contact.photoURL || undefined} />
-                        <AvatarFallback>
-                          <User className="h-5 w-5" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium truncate">{contact.displayName}</span>
-                          {contact.unread && (
-                            <span className="w-2 h-2 bg-blue-500 rounded-full" />
-                          )}
+                <ScrollArea className="h-[calc(80vh-16rem)]">
+                  <div className="space-y-2 pr-4">
+                    {contacts.map((contact) => (
+                      <div 
+                        key={contact.id}
+                        onClick={() => handleSelectContact(contact)}
+                        className={`p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all hover:shadow-sm ${
+                          selectedContact?.id === contact.id 
+                            ? "bg-primary/5 shadow-sm border border-primary/10" 
+                            : "hover:bg-secondary/50 border border-transparent"
+                        }`}
+                      >
+                        <Avatar className="h-12 w-12 border-2 border-primary/5">
+                          <AvatarImage src={contact.photoURL || undefined} />
+                          <AvatarFallback>
+                            <User className="h-6 w-6 text-primary/70" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="font-medium truncate">{contact.displayName}</span>
+                            {contact.unread && (
+                              <span className="w-2.5 h-2.5 bg-primary rounded-full animate-pulse" />
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate mt-0.5">
+                            {contact.lastMessage || "Henüz mesaj yok"}
+                          </p>
+                          <p className="text-xs text-muted-foreground/70 mt-1">
+                            {contact.lastMessageTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">{contact.lastMessage}</p>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               ) : (
-                <p className="text-center py-8 text-muted-foreground">
-                  Henüz mesajlaşma geçmişi bulunmuyor.
-                </p>
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                  <User className="h-12 w-12 text-muted-foreground/30" />
+                  <p className="text-muted-foreground text-sm">
+                    Henüz mesajlaşma geçmişi bulunmuyor
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -281,108 +293,151 @@ const Messages = () => {
             <CardContent className="p-0 flex-1 flex flex-col">
               {selectedContact ? (
                 <>
-                  {/* Mobilde geri butonu */}
-                  <div className="flex items-center gap-3 p-4 pb-4 border-b">
+                  {/* Üst Bar */}
+                  <div className="flex items-center gap-3 p-4 pb-4 border-b bg-card shadow-sm sticky top-0 z-20">
                     {window.innerWidth < 768 && (
-                      <Button variant="ghost" size="icon" onClick={() => setShowContacts(true)} className="mr-2">
+                      <Button variant="ghost" size="icon" onClick={() => setShowContacts(true)} className="mr-2 hover:bg-primary/5">
                         <ArrowLeft className="h-5 w-5" />
                       </Button>
                     )}
-                    <Avatar className="h-10 w-10">
+                    <Avatar className="h-12 w-12 border-2 border-primary/5">
                       <AvatarImage src={selectedContact.photoURL || undefined} />
                       <AvatarFallback>
-                        <User className="h-5 w-5" />
+                        <User className="h-6 w-6 text-primary/70" />
                       </AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{selectedContact.displayName}</span>
+                    <div className="flex-1">
+                      <h3 className="font-medium text-lg">{selectedContact.displayName}</h3>
+                      <p className="text-sm text-muted-foreground">Çevrimiçi</p>
+                    </div>
                   </div>
-                  {/* Mesajlar alanı - tünel efekti, overflow-y-auto, sabit yükseklik */}
-                  <div
-                    className="flex-1 overflow-y-auto py-4 px-4 space-y-4 bg-background"
-                    id="messagesScrollArea"
-                    style={{
-                      maxHeight: 'calc(80vh - 8rem - 90px)', // Card yüksekliği - header - input
-                      minHeight: '200px',
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: '#ccc #f9f9f9',
-                      overscrollBehavior: 'contain',
-                      borderRadius: '0 0 1.5rem 1.5rem',
-                    }}
-                  >
-                    {loading ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
-                    ) : messages.length > 0 ? (
-                      <>
-                        {messages.map((message) => (
-                          <div 
-                            key={message.id}
-                            className={`flex ${message.senderId === currentUser?.uid ? "justify-end" : "justify-start"}`}
-                          >
+
+                  {/* Mesajlar Alanı */}
+                  <ScrollArea className="flex-1 py-4 px-4">
+                    <div className="space-y-4">
+                      {loading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                      ) : messages.length > 0 ? (
+                        <>
+                          {messages.map((message) => (
                             <div 
-                              className={`max-w-[85vw] md:max-w-[70%] px-4 py-2 rounded-lg break-words shadow-sm ${
-                                message.senderId === currentUser?.uid 
-                                  ? "bg-primary text-primary-foreground" 
-                                  : "bg-muted"
-                              }`}
+                              key={message.id}
+                              className={`flex items-end gap-2 ${message.senderId === currentUser?.uid ? "flex-row-reverse" : "flex-row"}`}
                             >
-                              {message.imageUrl && (
-                                <img src={message.imageUrl} alt="gönderilen görsel" className="rounded-lg max-w-full max-h-60 mt-2" />
+                              {message.senderId !== currentUser?.uid && (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={message.senderAvatar || undefined} />
+                                  <AvatarFallback>
+                                    <User className="h-4 w-4" />
+                                  </AvatarFallback>
+                                </Avatar>
                               )}
-                              {message.content && <p>{message.content}</p>}
-                              <p className="text-xs opacity-70 mt-1">
-                                {message.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                              </p>
+                              <div 
+                                className={`group relative max-w-[85%] md:max-w-[70%] px-4 py-2.5 rounded-2xl break-words ${
+                                  message.senderId === currentUser?.uid 
+                                    ? "bg-primary text-primary-foreground rounded-br-sm" 
+                                    : "bg-secondary/50 rounded-bl-sm"
+                                }`}
+                              >
+                                {message.imageUrl && (
+                                  <div className="relative mb-2 rounded-lg overflow-hidden">
+                                    <img 
+                                      src={message.imageUrl} 
+                                      alt="gönderilen görsel" 
+                                      className="max-w-full rounded-lg hover:opacity-95 transition-opacity cursor-pointer" 
+                                      onClick={() => window.open(message.imageUrl, '_blank')}
+                                    />
+                                  </div>
+                                )}
+                                {message.content && <p className="leading-relaxed">{message.content}</p>}
+                                <span className="absolute bottom-0 ${message.senderId === currentUser?.uid ? 'left-0' : 'right-0'} p-1.5 text-xs text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity select-none pointer-events-none">
+                                  {message.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                      </>
-                    ) : (
-                      <p className="text-center py-8 text-muted-foreground">
-                        Henüz mesaj bulunmuyor. İlk mesajınızı gönderin!
-                      </p>
-                    )}
-                  </div>
-                  {/* Mesaj input alanı - sticky bottom, CardContent padding kaldırıldı */}
-                  <div className="flex gap-2 border-t p-4 bg-background sticky bottom-0 z-10">
-                    <label className="cursor-pointer">
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                      <span className="inline-block p-2 bg-muted rounded-full hover:bg-secondary transition">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-image"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                      </span>
-                    </label>
-                    <Input
-                      placeholder="Mesajınızı yazın..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      className="flex-1 text-base py-3 px-4 rounded-full"
-                      style={{fontSize: '1rem'}}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                    />
-                    <Button 
-                      onClick={sendMessage} 
-                      disabled={sendingMessage || (!newMessage.trim() && !imageFile)}
-                      className="rounded-full h-12 w-12 flex items-center justify-center"
-                    >
-                      {sendingMessage ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                          ))}
+                          <div ref={messagesEndRef} />
+                        </>
                       ) : (
-                        <Send className="h-5 w-5" />
+                        <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                          <MessageSquare className="h-12 w-12 text-muted-foreground/30" />
+                          <p className="text-muted-foreground text-sm">
+                            Henüz mesaj bulunmuyor. İlk mesajınızı gönderin!
+                          </p>
+                        </div>
                       )}
-                    </Button>
+                    </div>
+                  </ScrollArea>
+
+                  {/* Mesaj Gönderme Alanı */}
+                  <div className="flex items-center gap-2 border-t p-4 bg-card sticky bottom-0 z-10">
+                    <label className="cursor-pointer">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleImageChange} 
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-10 w-10 rounded-full hover:bg-primary/5"
+                        type="button"
+                      >
+                        <ImageIcon className="h-5 w-5" />
+                      </Button>
+                    </label>
+
+                    <div className="relative flex-1">
+                      {imageFile && (
+                        <div className="absolute -top-12 left-0 bg-card p-2 rounded-md shadow-sm border flex items-center gap-2">
+                          <span className="text-sm truncate max-w-[150px]">{imageFile.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-full hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setImageFile(null)}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </Button>
+                        </div>
+                      )}
+                      <Input
+                        placeholder="Mesajınızı yazın..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        className="pr-12 py-6 rounded-full border-primary/10 focus-visible:ring-primary/20"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                          }
+                        }}
+                      />
+                      <Button 
+                        onClick={sendMessage} 
+                        disabled={sendingMessage || (!newMessage.trim() && !imageFile)}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full"
+                        size="icon"
+                      >
+                        {sendingMessage ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">
-                    Mesajlaşmak için sol taraftan bir kişi seçin.
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground/30" />
+                  <p className="text-muted-foreground text-sm text-center max-w-[240px]">
+                    Mesajlaşmak için sol taraftan bir kişi seçin veya yeni bir sohbet başlatın
                   </p>
                 </div>
               )}
