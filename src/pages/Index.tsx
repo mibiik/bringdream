@@ -1,6 +1,6 @@
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
-import { Book, Share2, Lock, MessageSquare, Star, Sparkles, Moon as MoonIcon, Sun, Brain, Zap } from "lucide-react";
+import { Book, Share2, Lock, MessageSquare, Star, Sparkles, Moon as MoonIcon, Sun, Brain, Zap, Search } from "lucide-react";
 import { FeatureCard } from "@/components/feature-card";
 import { Link } from "react-router-dom";
 import { Cloud } from "@/components/Cloud";
@@ -17,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 
 // Framer Motion animasyonları için varyantlar
 const fadeIn = {
@@ -75,6 +75,40 @@ const stats = [
   { value: "4.8/5", label: "Kullanıcı Puanı" }
 ];
 
+const ErrorBoundary = ({ children }: { children: React.ReactNode }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const errorHandler = (error: Error) => {
+      console.error("Bileşen hatası:", error);
+      setHasError(true);
+    };
+
+    window.addEventListener("error", (event) => {
+      errorHandler(event.error);
+    });
+
+    return () => {
+      window.removeEventListener("error", (event) => {
+        errorHandler(event.error);
+      });
+    };
+  }, []);
+
+  if (hasError) {
+    return (
+      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+        <p>Bir hata oluştu. Lütfen sayfayı yenileyin.</p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+const GEMINI_API_KEY = "AIzaSyC9s1KViXMx5ZQ-_GYcyKr0saBEs8ewpak";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
 const Index = () => {
   const { currentUser } = useAuth();
   const [myDreams, setMyDreams] = useState([]);
@@ -82,6 +116,8 @@ const Index = () => {
   const [popularDreams, setPopularDreams] = useState([]);
   const [loadingPopular, setLoadingPopular] = useState(true);
   const [activeTab, setActiveTab] = useState("featured");
+  const [dailyInspiration, setDailyInspiration] = useState("");
+  const [dreamInterpretation, setDreamInterpretation] = useState("");
   
   // Animasyon için ref'ler
   const [heroRef, heroInView] = useInView({
@@ -95,12 +131,71 @@ const Index = () => {
   });
 
   useEffect(() => {
+    const fetchDailyInspiration = async () => {
+      try {
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: "Bana ilham verici bir rüya sözü söyle. Kısa ve özlü olsun, 1-2 cümleyi geçmesin."
+              }]
+            }]
+          }),
+        });
+        const data = await response.json();
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          setDailyInspiration(data.candidates[0].content.parts[0].text);
+        }
+      } catch (error) {
+        console.error("Daily inspiration fetch error:", error);
+      }
+    };
+
+    const fetchDreamInterpretation = async () => {
+      try {
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: "Rastgele bir rüya örneği ver ve bu rüyayı yorumla. Önce rüyayı anlat, sonra yorumunu yap. 3-4 cümleyi geçmesin."
+              }]
+            }]
+          }),
+        });
+        const data = await response.json();
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          setDreamInterpretation(data.candidates[0].content.parts[0].text);
+        }
+      } catch (error) {
+        console.error("Dream interpretation fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleRefreshDream = async () => {
+      setLoading(true);
+      await fetchDailyInspiration();
+      await fetchDreamInterpretation();
+    };
+
     const fetchDreams = async () => {
       if (!currentUser) {
         setMyDreams([]);
         setLoading(false);
         return;
       }
+
+    fetchDailyInspiration();
+    fetchDreamInterpretation();
       try {
         const dreamsQuery = query(
           collection(db, "dreams"),
@@ -289,8 +384,8 @@ const Index = () => {
             transition={{ duration: 0.8, delay: 0.3 }}
           >
             <div className="relative bg-gradient-to-br from-white/30 to-blue-100/30 p-6 rounded-2xl border border-blue-100 shadow-xl backdrop-blur-sm">
-              <div className="absolute -top-4 -right-4 bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
-                Yeni
+              <div className="absolute -top-4 -right-4 bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg cursor-pointer" onClick={handleRefreshDream}>
+                Yenile
               </div>
               <div className="flex items-center mb-4">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#1e355d] to-[#4fc3f7] flex items-center justify-center text-white">
@@ -298,7 +393,7 @@ const Index = () => {
                 </div>
                 <h3 className="ml-3 text-xl font-bold text-[#1e355d]">Rüya Asistanı</h3>
               </div>
-              <p className="text-[#2a406c] mb-4">"Dün gece uçtuğumu ve yüksek bir dağın üzerinde süzüldüğümü gördüm..."</p>
+              <p className="text-[#2a406c] mb-4">{dreamInterpretation || "Dün gece uçtuğumu ve yüksek bir dağın üzerinde süzüldüğümü gördüm..."}</p>
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                 <p className="text-[#1e355d] font-medium">Rüyanız özgürlük ve yeni bakış açıları kazanma arzunuzu yansıtıyor. Yükseklik, hayatınızdaki geniş perspektifi temsil ediyor.</p>
               </div>
@@ -427,7 +522,7 @@ const Index = () => {
               </div>
               <CardContent className="p-6 bg-white">
                 <blockquote className="italic text-[#1e355d] font-semibold text-lg border-l-4 border-[#4fc3f7] pl-4 py-2">
-                  "Hayallerin sınırı yoktur, sadece senin cesaretin var."
+                  "{dailyInspiration || "Hayallerin sınırı yoktur, sadece senin cesaretin var."}"
                 </blockquote>
               </CardContent>
             </Card>
@@ -516,71 +611,54 @@ const Index = () => {
             </Tabs>
           </div>
           
-          <TabsContent value="featured" className="mt-0">
-            {loadingPopular ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : popularDreams.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {popularDreams.map((dream) => (
-                  <motion.div 
-                    key={dream.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <DreamCard dream={dream} />
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 bg-white/30 backdrop-blur-sm rounded-xl p-6 border border-blue-100 shadow-md">
-                <p className="text-[#2a406c] font-medium">Henüz popüler rüya bulunmuyor.</p>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="my" className="mt-0">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : currentUser ? (
-              myDreams.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {myDreams.map((dream) => (
-                    <motion.div 
-                      key={dream.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <DreamCard dream={dream} onDelete={handleDeleteDream} />
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-white/30 backdrop-blur-sm rounded-xl p-6 border border-blue-100 shadow-md">
-                  <p className="text-[#2a406c] font-medium">Henüz rüya kaydetmediniz.</p>
-                  <Link to="/create-dream">
-                    <Button className="mt-4 bg-gradient-to-r from-[#1e355d] to-[#4fc3f7] hover:from-[#2a406c] hover:to-[#81d4fa]">
-                      İlk Rüyanı Kaydet
-                    </Button>
-                  </Link>
-                </div>
-              )
-            ) : (
-              <div className="text-center py-8 bg-white/30 backdrop-blur-sm rounded-xl p-6 border border-blue-100 shadow-md">
-                <p className="text-[#2a406c] font-medium">Rüyalarını görmek için giriş yap.</p>
-                <Link to="/login">
-                  <Button className="mt-4 bg-gradient-to-r from-[#1e355d] to-[#4fc3f7] hover:from-[#2a406c] hover:to-[#81d4fa]">
-                    Giriş Yap
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </TabsContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+  <TabsList className="grid w-full grid-cols-2 mb-6">
+    <TabsTrigger value="featured">Öne Çıkanlar</TabsTrigger>
+    <TabsTrigger value="popular">Popüler</TabsTrigger>
+  </TabsList>
+  <TabsContent value="featured">
+    {loading ? (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+      </div>
+    ) : myDreams.length > 0 ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {myDreams.map((dream) => (
+          <DreamCard
+            key={dream.id}
+            dream={dream}
+            onDelete={handleDeleteDream}
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Henüz bir rüya kaydetmediniz.</p>
+      </div>
+    )}
+  </TabsContent>
+  <TabsContent value="popular">
+    {loadingPopular ? (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+      </div>
+    ) : popularDreams.length > 0 ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {popularDreams.map((dream) => (
+          <DreamCard
+            key={dream.id}
+            dream={dream}
+            onDelete={handleDeleteDream}
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Henüz popüler rüya yok.</p>
+      </div>
+    )}
+  </TabsContent>
+</Tabs>
         </motion.div>
         
         {/* Kullanıcı Yorumları */}
@@ -686,35 +764,102 @@ const Index = () => {
       </section>
       
       {/* CTA Section */}
-      <section className="py-20 px-4 md:px-6 max-w-6xl mx-auto text-center">
-        <h2 className="text-3xl md:text-4xl font-bold mb-6 text-[#1e355d]">
-          Hayallerini kaydetmeye hazır mısın?
-        </h2>
-        <p className="text-lg text-[#2a406c] mb-8 max-w-2xl mx-auto">
-          Hemen ücretsiz bir hesap oluştur, Bring ile rüyalarını güvenle sakla ve keşfetmeye başla.
-        </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <Link to="/register">
-            <Button size="lg" className="bg-gradient-to-r from-[#4fc3f7] to-[#1e355d] text-white shadow-xl hover:from-[#81d4fa] hover:to-[#2a406c] transition font-bold px-8 py-2 text-lg border-2 border-[#4fc3f7]">
-              Hemen Kayıt Ol
-            </Button>
-          </Link>
-          <Link to="/login">
-            <Button variant="outline" size="lg" className="bg-gradient-to-r from-[#e3f0fa] to-[#c9e2f5] text-[#1e355d] font-bold px-8 py-2 text-lg border-2 border-[#1e355d] hover:bg-[#4fc3f7] hover:text-white hover:border-[#4fc3f7] transition">
-              Giriş Yap
-            </Button>
-          </Link>
+      <motion.section 
+        className="py-20 px-4 md:px-6 max-w-6xl mx-auto text-center relative overflow-hidden"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+      >
+        {/* Dekoratif arka plan öğeleri */}
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <motion.div 
+            className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-blue-100 opacity-40 blur-3xl"
+            animate={{ scale: [1, 1.2, 1], x: [0, 10, 0], y: [0, -10, 0] }}
+            transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
+          />
+          <motion.div 
+            className="absolute -bottom-20 -right-10 w-60 h-60 rounded-full bg-blue-200 opacity-30 blur-3xl"
+            animate={{ scale: [1, 1.1, 1], x: [0, -15, 0], y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 10, ease: "easeInOut" }}
+          />
         </div>
-      </section>
+        
+        <motion.div
+          initial={{ y: 50, opacity: 0 }}
+          whileInView={{ y: 0, opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <h2 className="text-3xl md:text-5xl font-bold mb-6 text-[#1e355d] drop-shadow-sm">
+            Hayallerini kaydetmeye hazır mısın?
+          </h2>
+          <p className="text-lg md:text-xl text-[#2a406c] mb-8 max-w-2xl mx-auto">
+            Hemen ücretsiz bir hesap oluştur, Bring ile rüyalarını güvenle sakla ve keşfetmeye başla.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            >
+              <Link to="/register">
+                <Button size="lg" className="bg-gradient-to-r from-[#4fc3f7] to-[#1e355d] text-white shadow-xl hover:from-[#81d4fa] hover:to-[#2a406c] transition-all duration-300 font-bold px-8 py-6 text-lg border-2 border-[#4fc3f7] rounded-xl">
+                  <Sparkles className="mr-2 h-5 w-5" /> Hemen Kayıt Ol
+                </Button>
+              </Link>
+            </motion.div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            >
+              <Link to="/login">
+                <Button variant="outline" size="lg" className="bg-gradient-to-r from-[#e3f0fa] to-[#c9e2f5] text-[#1e355d] font-bold px-8 py-6 text-lg border-2 border-[#1e355d] hover:bg-[#4fc3f7] hover:text-white hover:border-[#4fc3f7] transition-all duration-300 rounded-xl">
+                  <User className="mr-2 h-5 w-5" /> Giriş Yap
+                </Button>
+              </Link>
+            </motion.div>
+          </div>
+        </motion.div>
+      </motion.section>
       
       {/* Footer */}
-      <footer className="py-8 px-4 border-t border-blue-100 bg-[#e3f0fa] backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center gap-2 mb-4 md:mb-0">
-            <img src="/vvvvv.png" alt="Bring Logo" className="h-5 w-auto drop-shadow-lg" style={{maxWidth: 40}} />
+      <footer className="py-12 px-4 border-t border-blue-100 bg-gradient-to-b from-[#e3f0fa] to-[#c9e2f5] backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+            <div className="flex items-center gap-3 mb-6 md:mb-0">
+              <img src="/vvvvv.png" alt="Bring Logo" className="h-8 w-auto drop-shadow-lg bg-white/70 rounded-lg p-1" style={{maxWidth: 60}} />
+              <span className="text-xl font-bold text-[#1e355d]">Bring</span>
+            </div>
+            <div className="flex flex-wrap gap-6 justify-center">
+              <Link to="/about" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors font-medium">Hakkımızda</Link>
+              <Link to="/discover" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors font-medium">Keşfet</Link>
+              <Link to="/login" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors font-medium">Giriş Yap</Link>
+              <Link to="/register" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors font-medium">Kayıt Ol</Link>
+            </div>
           </div>
-          <div className="text-sm text-[#2a406c]">
-            &copy; {new Date().getFullYear()} Bring. Hayallerin sana ait.
+          <div className="border-t border-blue-100 pt-6 flex flex-col md:flex-row justify-between items-center">
+            <div className="text-sm text-[#2a406c] mb-4 md:mb-0">
+              &copy; {new Date().getFullYear()} Bring. Hayallerin sana ait.
+            </div>
+            <div className="flex gap-4">
+              <a href="#" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/>
+                </svg>
+              </a>
+              <a href="#" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.917 3.917 0 0 0-1.417.923A3.927 3.927 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.916 3.916 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.926 3.926 0 0 0-.923-1.417A3.911 3.911 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0h.003zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599.28.28.453.546.598.92.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.47 2.47 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.478 2.478 0 0 1-.92-.598 2.48 2.48 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233 0-2.136.008-2.388.046-3.231.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92.28-.28.546-.453.92-.598.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045v.002zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92zm-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217zm0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334z"/>
+                </svg>
+              </a>
+              <a href="#" className="text-[#1e355d] hover:text-[#4fc3f7] transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"/>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </footer>

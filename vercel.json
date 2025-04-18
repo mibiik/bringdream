@@ -4,23 +4,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "routes": [
-    {
-      "src": "/dream/:id",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/dreams/:id",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/profile/:username",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/editdream/:id",
-      "dest": "/index.html"
-    }
   ]
 }
