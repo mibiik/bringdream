@@ -119,6 +119,17 @@ const Index = () => {
   const [dailyInspiration, setDailyInspiration] = useState("");
   const [dreamInterpretation, setDreamInterpretation] = useState("");
   
+  const handleRefreshDream = async () => {
+    try {
+      const newInterpretation = await generateDreamInterpretation();
+      setDreamInterpretation(newInterpretation);
+      toast.success("Rüya yorumu yenilendi!");
+    } catch (error) {
+      console.error("Rüya yorumu yenilenirken hata:", error);
+      toast.error("Rüya yorumu yenilenirken bir hata oluştu.");
+    }
+  };
+
   // Animasyon için ref'ler
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
