@@ -10,11 +10,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Heart, MessageSquare, Lock, User, Share2, Loader2 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore"; // serverTimestamp eklendi
+import { doc, getDoc, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, updateDoc, increment } from "firebase/firestore"; // serverTimestamp, updateDoc, increment eklendi
 import { useAuth } from "@/components/auth-provider";
 import { toast } from "@/components/ui/sonner";
-// DreamInterpretation importu yorum satırı yapıldı, kullanılmıyorsa kaldırılabilir
-// import { DreamInterpretation } from "@/components/dream-interpretation";
+// import { DreamInterpretation } from "@/components/dream-interpretation"; // Kullanılmıyorsa kaldırıldı
 import { AIComment } from "@/components/ai-comment";
 
 
@@ -22,29 +21,43 @@ interface Dream {
   id: string;
   title: string;
   content: string;
-  createdAt: string; // Veya Date türünde tutup formatlayabilirsiniz
+  createdAt: string;
   isPrivate: boolean;
   userId: string;
   userName: string;
   userAvatar: string | null;
   userUsername?: string;
   likes: number;
-  comments: number;
+  comments: number; // Bu state güncellenmeyebilir, yorum sayısı 'comments' state'inden alınabilir
 }
 
 interface Comment {
   id: string;
   text: string;
-  createdAt: string; // Veya Date türünde tutup formatlayabilirsiniz
+  createdAt: string;
   userId: string;
   userName: string;
   userAvatar: string | null;
 }
 
+// Tarih formatlama fonksiyonu (Component dışında tanımlanabilir)
+const formatDate = (timestamp: any) => {
+  if (!timestamp || typeof timestamp.toDate !== 'function') {
+    return "Bilinmeyen tarih";
+  }
+  try {
+    return new Date(timestamp.toDate()).toLocaleDateString("tr-TR", {
+      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  } catch (error) {
+    console.error("Tarih formatlama hatası:", error);
+    return "Geçersiz tarih";
+  }
+};
+
+
 const DreamDetail = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  // shouldShowDialog fonksiyonu kullanılmıyor gibi görünüyor, gerekmiyorsa kaldırılabilir
-  // const shouldShowDialog = () => localStorage.getItem("hideDeleteDreamDialog") !== "1";
   const { dreamId } = useParams<{ dreamId: string }>();
   const navigate = useNavigate();
 
@@ -53,31 +66,19 @@ const DreamDetail = () => {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  // showInterpretation state'i kullanılmıyor gibi, gerekmiyorsa kaldırılabilir
-  // const [showInterpretation, setShowInterpretation] = useState(false);
   const { currentUser } = useAuth();
-  const [liked, setLiked] = useState(false); // Başlangıç değeri false olmalı
-  const [likeCount, setLikeCount] = useState(0); // Başlangıç değeri 0 olmalı, dream yüklendikten sonra güncellenmeli
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
   const [shared, setShared] = useState(false);
   const commentsRef = useRef<HTMLDivElement>(null);
 
-  // Tarih formatlama fonksiyonu
-  const formatDate = (timestamp: any) => {
-    if (!timestamp || !timestamp.toDate) {
-      return "Bilinmeyen tarih";
-    }
-    return new Date(timestamp.toDate()).toLocaleDateString("tr-TR", {
-      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  };
-
   const fetchDreamAndComments = async () => {
     if (!dreamId) {
-        toast.error("Geçersiz rüya kimliği.", { position: 'top-center' });
-        navigate('/');
-        return;
+      toast.error("Geçersiz rüya kimliği.", { position: 'top-center' });
+      navigate('/');
+      return Promise.resolve(null); // Promise döndürerek unsubscribe hatasını önle
     }
-    setLoading(true); // Yükleme başlangıcı
+    setLoading(true);
 
     try {
       const dreamDocRef = doc(db, "dreams", dreamId);
@@ -86,15 +87,14 @@ const DreamDetail = () => {
       if (dreamDoc.exists()) {
         const dreamData = dreamDoc.data();
 
-        // Rüya özel mi ve kullanıcı sahip değil mi kontrolü
         if (dreamData.isPrivate && dreamData.userId !== currentUser?.uid) {
           toast.error("Bu rüya özel olarak ayarlanmış veya bulunamadı.", { position: 'top-center' });
           setLoading(false);
-          setDream(null); // Rüya null olarak ayarlanmalı
-          return;
+          setDream(null);
+          return Promise.resolve(null); // Promise döndür
         }
 
-        const fetchedDream = {
+        const fetchedDream: Dream = {
           id: dreamDoc.id,
           title: dreamData.title,
           content: dreamData.content,
@@ -103,15 +103,14 @@ const DreamDetail = () => {
           userId: dreamData.userId,
           userName: dreamData.userName,
           userAvatar: dreamData.userAvatar || null,
-          userUsername: dreamData.userUsername || undefined, // null yerine undefined olabilir
+          userUsername: dreamData.userUsername || undefined,
           likes: dreamData.likes || 0,
-          comments: dreamData.comments || 0
+          comments: dreamData.comments || 0 // Firestore'dan gelen ilk yorum sayısı
         };
         setDream(fetchedDream);
-        setLikeCount(fetchedDream.likes); // Like sayısını state'e yükle
-        // TODO: Kullanıcının bu rüyayı beğenip beğenmediğini Firestore'dan kontrol et ve `liked` state'ini güncelle
+        setLikeCount(fetchedDream.likes);
+        // TODO: Kullanıcının beğeni durumunu Firestore'dan kontrol et
 
-        // Yorumları dinlemek için listener ayarla
         const commentsQuery = query(
           collection(db, "comments"),
           where("dreamId", "==", dreamId),
@@ -130,74 +129,71 @@ const DreamDetail = () => {
               userAvatar: data.userAvatar || null
             };
           });
-
           setComments(commentsData);
-        }, (error) => { // Hata durumu için callback eklendi
+        }, (error) => {
           console.error("Yorumları dinlerken hata:", error);
           toast.error("Yorumlar yüklenirken bir hata oluştu.", { position: 'top-center' });
         });
 
-        // Cleanup function for the listener
-        return () => unsubscribe();
+        setLoading(false); // Yorum listener'ı kurulduktan sonra loading'i kapat
+        return unsubscribe; // Cleanup fonksiyonunu döndür
 
       } else {
         toast.error("Rüya bulunamadı.", { position: 'top-center' });
-        setDream(null); // Rüya null olarak ayarlanmalı
+        setDream(null);
+        setLoading(false);
+        return Promise.resolve(null); // Promise döndür
       }
     } catch (error) {
       console.error("Rüya veya yorum çekme hatası:", error);
       toast.error("Rüya yüklenirken bir hata oluştu.", { position: 'top-center' });
-      setDream(null); // Hata durumunda rüyayı null yap
-    } finally {
-      setLoading(false); // Yükleme bitişi
+      setDream(null);
+      setLoading(false);
+      return Promise.resolve(null); // Promise döndür
     }
+    // finally bloğu kaldırıldı, loading state'i try/catch içinde yönetiliyor.
   };
 
-  // Rüya ve Yorumları Çekmek İçin useEffect
   useEffect(() => {
-    const unsubscribe = fetchDreamAndComments();
+    let unsubscribe: (() => void) | null = null;
 
-    // Component unmount edildiğinde listener'ı temizle
-    return () => {
-      if (unsubscribe instanceof Promise) {
-        // Eğer fetchDreamAndComments bir promise döndürdüyse (hata veya erken return durumu)
-        // ve bu promise içinde bir unsubscribe fonksiyonu varsa, onu handle et
-        // Bu senaryo yukarıdaki kodda pek olası değil ama genel bir önlem
-        unsubscribe.then(unsubFunc => {
-          if (typeof unsubFunc === 'function') {
-            unsubFunc();
-          }
-        }).catch(() => {}); // Hata durumunda sessiz kal
-      } else if (typeof unsubscribe === 'function') {
-          // Eğer doğrudan bir unsubscribe fonksiyonu döndürdüyse
-          unsubscribe();
+    const fetchData = async () => {
+      const result = await fetchDreamAndComments();
+      if (typeof result === 'function') {
+        unsubscribe = result;
       }
     };
-  }, [dreamId, currentUser?.uid]); // currentUser?.uid bağımlılıklara eklendi, özel rüya kontrolü için
+
+    fetchData();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [dreamId, currentUser?.uid]); // Bağımlılıklar doğru
 
   const handleLike = async () => {
-    if (!currentUser || !dreamId) {
+     if (!currentUser || !dreamId) {
         toast.error("Beğenmek için giriş yapmalısınız.", { position: 'top-center'});
         return;
     }
-    // TODO: Firestore'da like işlemini gerçekleştir (beğen/beğenmekten vazgeç)
-    // Örnek: Beğeni sayısını güncelle ve kullanıcının beğeni listesine ekle/çıkar
-    // Bu kısım backend mantığınıza göre detaylandırılmalı
-
+    // Optimistic UI update
     const newLikedState = !liked;
     setLiked(newLikedState);
     setLikeCount((c) => newLikedState ? c + 1 : c - 1);
 
     try {
-        // Firestore'da ilgili güncellemeleri yapın
-        // Örneğin: users/{userId}/likedDreams koleksiyonuna ekleme/çıkarma
-        //         dreams/{dreamId} belgesindeki likes sayısını güncelleme
-        // await updateLikeStatusInFirestore(dreamId, currentUser.uid, newLikedState);
-        toast.info(newLikedState ? "Rüya beğenildi." : "Beğeni geri alındı.", { position: 'top-center', duration: 2000 });
+        // TODO: Implement Firestore update logic for likes
+        // Example: updateDoc(doc(db, 'dreams', dreamId), { likes: increment(newLikedState ? 1 : -1) });
+        //         Update user's liked dreams list
+        console.log("Like/Unlike action to be implemented in Firestore");
+        // toast.info(newLikedState ? "Rüya beğenildi." : "Beğeni geri alındı.", { position: 'top-center', duration: 1500 });
     } catch (error) {
         console.error("Beğenme hatası:", error);
         toast.error("Beğenme işlemi sırasında bir hata oluştu.", { position: 'top-center' });
-        // Başarısız olursa state'i geri al
+        // Rollback UI on error
         setLiked(!newLikedState);
         setLikeCount((c) => !newLikedState ? c + 1 : c - 1);
     }
@@ -206,8 +202,7 @@ const DreamDetail = () => {
   const handleComment = () => {
     setTimeout(() => {
       commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Belki yorum inputuna focuslamak daha iyi olabilir
-      const textarea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder="Rüya hakkında bir yorum yazın..."]');
+      const textarea = document.querySelector<HTMLTextAreaElement>('#new-comment-textarea'); // ID ekledim
       textarea?.focus();
     }, 100);
   };
@@ -230,35 +225,39 @@ const DreamDetail = () => {
     if (!currentUser || !dreamId || !newComment.trim()) return;
 
     setSubmitting(true);
+    const commentText = newComment; // State değişmeden önce yakala
+    setNewComment(""); // Optimistic clear
 
     try {
-      // Kullanıcı verisini al (optimize edilebilir, belki Auth context'te tutuluyordur)
-      const userDocRef = doc(db, "users", currentUser.uid);
-      const userDoc = await getDoc(userDocRef);
-      // Firestore'dan kullanıcı adını ve fotoğrafını al veya Auth context'ten al
-      const userName = userDoc.exists() ? userDoc.data()?.displayName : currentUser.displayName || "Anonim Kullanıcı";
-      const userAvatar = userDoc.exists() ? userDoc.data()?.photoURL : currentUser.photoURL || null;
-
+      // Kullanıcı adını ve avatarını auth'tan veya state'ten al (fetch yerine)
+      const userName = currentUser.displayName || "Anonim Kullanıcı";
+      const userAvatar = currentUser.photoURL || null;
 
       await addDoc(collection(db, "comments"), {
         dreamId,
-        text: newComment,
-        createdAt: serverTimestamp(), // Firestore server zaman damgası kullan
+        text: commentText,
+        createdAt: serverTimestamp(),
         userId: currentUser.uid,
         userName: userName,
         userAvatar: userAvatar
       });
 
-      // Rüyanın yorum sayısını güncellemek için bir cloud function veya transaction kullanmak daha iyi olabilir
-      // Şimdilik client-side güncelleme varsayımı:
-      // const dreamDocRef = doc(db, "dreams", dreamId);
-      // await updateDoc(dreamDocRef, { comments: increment(1) }); // increment import edilmeli
+      // Rüya dökümanındaki yorum sayısını artır (Cloud Function daha iyi olur)
+      try {
+        await updateDoc(doc(db, "dreams", dreamId), {
+          comments: increment(1)
+        });
+      } catch (updateError) {
+          console.error("Yorum sayısı güncellenemedi:", updateError);
+          // Yorum eklendiği için devam et, sadece logla
+      }
 
-      setNewComment("");
+      // setNewComment(""); // Zaten yukarıda yapıldı
       toast.success("Yorumunuz eklendi.", { position: 'top-center' });
     } catch (error) {
       console.error("Yorum ekleme hatası:", error);
       toast.error("Yorum eklenirken bir hata oluştu.", { position: 'top-center' });
+      setNewComment(commentText); // Hata durumunda textarea'yı geri doldur
     } finally {
       setSubmitting(false);
     }
@@ -277,7 +276,7 @@ const DreamDetail = () => {
   if (!dream) {
     return (
       <DashboardLayout>
-        <div className="text-center py-12">
+        <div className="text-center py-12 px-4">
           <p className="text-lg text-muted-foreground">Rüya bulunamadı veya bu içeriğe erişim izniniz yok.</p>
           <Button onClick={() => navigate('/')} className="mt-4">Ana Sayfaya Dön</Button>
         </div>
@@ -285,21 +284,25 @@ const DreamDetail = () => {
     );
   }
 
+  // Yorumları filtrele (AI olmayanlar)
+  const userComments = comments.filter(c => c.userId !== 'ai');
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-3xl mx-auto px-4 py-6">
+        {/* Rüya Detay Kartı */}
         <Card className="overflow-hidden border border-border/50 bg-background/95 backdrop-blur-sm shadow-sm">
           <CardHeader className="p-6">
-            {/* Rüya Sahibi Bilgileri */}
-            <div className="flex items-center gap-3 mb-4">
-              <a href={`/profile/${dream.userUsername || dream.userId}`} className="cursor-pointer">
+             {/* ... (CardHeader içeriği önceki kodla aynı, kontrol edildi) ... */}
+             <div className="flex items-center gap-3 mb-4">
+              <a href={`/profile/${dream.userUsername || dream.userId}`} className="cursor-pointer flex-shrink-0">
                   <Avatar className="h-10 w-10 border">
                     <AvatarImage src={dream.userAvatar || undefined} alt={dream.userName} />
-                    <AvatarFallback>{dream.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarFallback>{dream.userName ? dream.userName.slice(0, 2).toUpperCase() : '??'}</AvatarFallback>
                   </Avatar>
               </a>
-              <div className="flex flex-col flex-grow">
-                <span className="text-sm font-medium">
+              <div className="flex flex-col flex-grow min-w-0"> {/* min-w-0 taşmayı önler */}
+                <span className="text-sm font-medium truncate"> {/* truncate uzun isimlerde taşmayı önler */}
                   <a
                     href={`/profile/${dream.userUsername || dream.userId}`}
                     className="text-foreground hover:underline cursor-pointer font-semibold"
@@ -317,11 +320,10 @@ const DreamDetail = () => {
                 </span>
                 <span className="text-xs text-muted-foreground">{dream.createdAt}</span>
               </div>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0"> {/* Düzenleme/Silme Butonları */}
                   {dream.isPrivate && (
                     <Lock className="h-4 w-4 text-muted-foreground" title="Özel Rüya"/>
                   )}
-                  {/* Rüya Sahibi Yönetim Butonları */}
                  {currentUser && dream.userId === currentUser.uid && (
                    <>
                     <Button
@@ -331,7 +333,8 @@ const DreamDetail = () => {
                       title="Rüyayı Düzenle"
                       onClick={() => navigate(`/editdream/${dream.id}`)}
                     >
-                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                     {/* Pencil Icon SVG */}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                     </Button>
                     <Button
                       variant="ghost"
@@ -347,42 +350,38 @@ const DreamDetail = () => {
                       onClose={() => setDeleteDialogOpen(false)}
                       onConfirm={async () => {
                         setDeleteDialogOpen(false);
-                        const success = await safeDeleteDream(dream.id, currentUser.uid); // Kullanıcı kimliği eklenmeli
+                        // currentUser null kontrolü eklendi
+                        const success = currentUser ? await safeDeleteDream(dream.id, currentUser.uid) : false;
                         if (success) {
                           toast.success("Rüya başarıyla silindi.", { position: 'top-center' });
-                          navigate("/dashboard"); // veya navigate('/')
-                        } else {
-                          // safeDeleteDream içinde zaten toast gösteriliyor olabilir
-                          // toast.error("Rüya silinirken bir hata oluştu.", { position: 'top-center' });
+                          navigate("/dashboard");
+                        } else if (currentUser){ // Sadece giriş yapmışsa ve silme başarısızsa hata göster
+                           toast.error("Rüya silinirken bir hata oluştu veya yetkiniz yok.", { position: 'top-center' });
                         }
                       }}
-                      minimal // Bu prop varsa ve kullanılıyorsa kalsın
+                      minimal
                     />
                    </>
                   )}
               </div>
             </div>
-
-            {/* Rüya Başlığı */}
             <h1 className="text-2xl font-semibold mb-2 break-words">{dream.title}</h1>
-
           </CardHeader>
-
-          {/* Rüya İçeriği */}
           <CardContent className="p-6 pt-2">
+             {/* ... (CardContent içeriği önceki kodla aynı) ... */}
             <p className="text-base whitespace-pre-line text-foreground/90 break-words">{dream.content}</p>
           </CardContent>
-
-          {/* Etkileşim Butonları */}
           <CardFooter className="p-6 pt-4 flex items-center justify-between border-t border-border/30 mt-4">
-            <div className="flex items-center gap-2 sm:gap-3">
+             {/* ... (CardFooter içeriği önceki kodla aynı, like/comment/share butonları) ... */}
+             <div className="flex items-center gap-2 sm:gap-3">
               <Button variant="ghost" size="sm" className="h-8 px-2 gap-1.5 group" onClick={handleLike} aria-pressed={liked}>
                 <Heart className={`h-4 w-4 transition-colors duration-200 ${liked ? "fill-red-500 text-red-500 scale-110" : "text-muted-foreground group-hover:text-red-500"}`} />
                 <span className={`text-xs font-medium transition-colors duration-200 ${liked ? "text-red-500" : "text-muted-foreground group-hover:text-red-500"}`}>{likeCount}</span>
               </Button>
               <Button variant="ghost" size="sm" className="h-8 px-2 gap-1.5 group" onClick={handleComment}>
                 <MessageSquare className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                <span className="text-xs text-muted-foreground group-hover:text-primary">{comments.length}</span>
+                 {/* Yorum sayısını userComments.length'ten al */}
+                <span className="text-xs text-muted-foreground group-hover:text-primary">{userComments.length}</span>
               </Button>
             </div>
             <div className="flex gap-2">
@@ -396,31 +395,28 @@ const DreamDetail = () => {
 
         {/* AI Yorum Alanı */}
         <div className="mt-6">
-            <AIComment
-              dreamId={dream.id}
-              dreamContent={dream.content}
-              // onNewAIComment prop'u AIComment bileşeninizde tanımlıysa kullanın
-              // Eğer AI yorumu geldiğinde comments state'ini güncellemek isterseniz:
-              // onNewAIComment={(newAIComment) => setComments(prev => [newAIComment, ...prev])}
-              onNewAIComment={() => { console.log("Yeni AI yorumu eklendi/güncellendi."); }}
-            />
+          <AIComment
+            dreamId={dream.id}
+            dreamContent={dream.content}
+            onNewAIComment={() => { console.log("Yeni AI yorumu geldi (state güncellemesi AIComment içinde olabilir)"); }}
+          />
         </div>
-
 
         {/* Yorumlar Bölümü */}
         <div className="space-y-6 mt-8" ref={commentsRef}>
-          <h2 className="text-xl font-semibold">Yorumlar ({comments.filter(c => c.userId !== 'ai').length})</h2> {/* AI yorumlarını sayma */}
+           {/* Yorum başlığını userComments sayısına göre göster */}
+          <h2 className="text-xl font-semibold">Yorumlar ({userComments.length})</h2>
 
           {/* Kullanıcı Yorum Ekleme Alanı */}
-          {currentUser && (
+          {currentUser ? (
             <div className="flex gap-3 items-start">
               <Avatar className="h-10 w-10 mt-1 flex-shrink-0 border">
-                 {/* Auth context'ten veya Firestore'dan alınan avatar */}
                  <AvatarImage src={currentUser.photoURL || undefined} alt={currentUser.displayName || "Kullanıcı"}/>
                  <AvatarFallback><User className="h-5 w-5 text-muted-foreground" /></AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
                 <Textarea
+                  id="new-comment-textarea" // HandleComment'da focus için ID eklendi
                   placeholder="Rüya hakkında bir yorum yazın..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
@@ -443,48 +439,63 @@ const DreamDetail = () => {
                 </Button>
               </div>
             </div>
+          ) : ( // Giriş yapılmamışsa mesaj göster
+            <p className="text-sm text-muted-foreground text-center py-4">Yorum yapmak için <a href="/login" className="text-primary hover:underline font-medium">giriş yapın</a>.</p>
           )}
-           {!currentUser && (
-                <p className="text-sm text-muted-foreground text-center py-4">Yorum yapmak için <a href="/login" className="text-primary hover:underline">giriş yapın</a>.</p>
-           )}
 
-          {/* Yorumlar Listesi */}
+          {/* ----- YORUM LİSTESİ (HATA ALINAN BÖLGE) ----- */}
           <div className="space-y-4 pt-4 border-t border-border/30">
-             {/* Sadece kullanıcı yorumlarını filtrele */}
-            {comments.filter(c => c.userId !== 'ai').length > 0 ? (
-              comments.filter(c => c.userId !== 'ai').map((comment) => (
-                <Card key={comment.id} className="bg-muted/30 border-none shadow-none">
+            {userComments.length > 0 ? (
+              userComments.map((comment) => (
+                // Her yorum için Card elemanı
+                <Card key={comment.id} className="bg-background border border-border/30 shadow-sm"> {/* Veya bg-muted/30 */}
                   <CardContent className="p-4">
+                    {/* Flex container for avatar and content */}
                     <div className="flex gap-3 items-start">
-                      {/* ------ HATA BURADAYDI ------- */}
-                      {/* Fragment (<> </>) kaldırıldı */}
+                      {/* Avatar - Bu bölge hata mesajında belirtiliyordu */}
                       <Avatar className="h-8 w-8 flex-shrink-0 border">
-                        <AvatarImage src={comment.userAvatar || undefined} alt={comment.userName}/>
+                        <AvatarImage src={comment.userAvatar || undefined} alt={comment.userName ? `${comment.userName} avatarı` : 'Kullanıcı avatarı'}/>
                         <AvatarFallback>{comment.userName ? comment.userName.slice(0, 2).toUpperCase() : '??'}</AvatarFallback>
                       </Avatar>
-                      {/* ------ DÜZELTİLDİ ------- */}
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                           <a href={`/profile/${comment.userId}`} className="text-sm font-medium text-foreground hover:underline">{comment.userName || 'Kullanıcı'}</a>
-                          <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
+                       {/* /Avatar kapanışı */}
+
+                      {/* Comment Content */}
+                      <div className="flex-1 min-w-0"> {/* min-w-0 taşmayı önler */}
+                        <div className="flex justify-between items-center mb-1 gap-2">
+                          {/* Kullanıcı Adı (Link olabilir) */}
+                          <span className="text-sm font-medium text-foreground truncate">
+                             <a href={`/profile/${comment.userId}`} className="hover:underline">{comment.userName || 'Kullanıcı'}</a>
+                          </span>
+                           {/* Yorum Tarihi */}
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{comment.createdAt}</span>
                         </div>
+                         {/* Yorum Metni */}
                         <p className="text-sm text-foreground/90 whitespace-pre-line break-words">{comment.text}</p>
                       </div>
+                       {/* /Comment Content div kapanışı */}
                     </div>
+                    {/* /Flex container div kapanışı */}
                   </CardContent>
+                   {/* /CardContent kapanışı */}
                 </Card>
-              ))
+                 // /Card kapanışı
+              )) // .map fonksiyonu parantezi
             ) : (
-                !loading && ( // Sadece yükleme bittiğinde "yorum yok" mesajını göster
-                    <p className="text-center text-muted-foreground py-6">
-                      Henüz yorum yapılmamış. İlk yorumu sen yap!
-                    </p>
-                )
-            )}
+              // Yorum yoksa gösterilecek mesaj (loading bittiyse)
+              !loading && (
+                <p className="text-center text-muted-foreground py-6">
+                  Henüz yorum yapılmamış. İlk yorumu sen yap!
+                </p>
+              )
+            )} {/* Ternary operatörün kapanış parantezi */}
           </div>
+           {/* /Yorum listesi div kapanışı */}
         </div>
+        {/* /Yorumlar bölümü div kapanışı */}
       </div>
+       {/* /Ana container div kapanışı */}
     </DashboardLayout>
+     // /DashboardLayout kapanışı
   );
 };
 
