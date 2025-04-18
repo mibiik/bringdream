@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { DeleteDreamDialog } from "@/components/DeleteDreamDialog";
@@ -13,9 +13,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, addDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/components/auth-provider";
 import { toast } from "@/components/ui/sonner";
-import { DreamInterpretation } from "@/components/dream-interpretation";
 import { AIComment } from "@/components/ai-comment";
-import { useRef } from "react";
 
 interface Dream {
   id: string;
@@ -42,11 +40,21 @@ interface Comment {
 
 const DreamDetail = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const shouldShowDialog = () => localStorage.getItem("hideDeleteDreamDialog") !== "1";
   const { dreamId } = useParams<{ dreamId: string }>();
   const navigate = useNavigate();
   
-  // URL'den rüya kimliğini kontrol et
+  const [dream, setDream] = useState<Dream | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const { currentUser } = useAuth();
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [shared, setShared] = useState(false);
+  const commentsRef = useRef<HTMLDivElement>(null);
+
+  // URL'den rüya kimliğini kontrol et ve veriyi çek
   useEffect(() => {
     if (!dreamId) {
       toast.error("Geçersiz rüya kimliği.", { position: 'top-center' });
@@ -54,42 +62,7 @@ const DreamDetail = () => {
       return;
     }
 
-    // Geçerli bir rüya kimliği varsa veriyi çek
-    fetchDreamAndComments();
-  }, [dreamId, navigate]);
-  const [dream, setDream] = useState<Dream | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [showInterpretation, setShowInterpretation] = useState(false);
-  const { currentUser } = useAuth();
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(dream?.likes || 0);
-  const [shared, setShared] = useState(false);
-  const commentsRef = useRef<HTMLDivElement>(null);
-
-  const handleLike = () => {
-    setLiked((v) => !v);
-    setLikeCount((c) => liked ? c - 1 : c + 1);
-    // TODO: Backend ile entegre etmek için buraya API çağrısı eklenebilir
-  };
-
-  const handleComment = () => {
-    setTimeout(() => {
-      commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShared(true);
-    setTimeout(() => setShared(false), 2000);
-  };
-
-  const fetchDreamAndComments = async () => {
-      if (!dreamId) return;
-
+    const fetchDreamAndComments = async () => {
       try {
         const dreamDocRef = doc(db, "dreams", dreamId);
         const dreamDoc = await getDoc(dreamDocRef);
@@ -104,7 +77,7 @@ const DreamDetail = () => {
             return;
           }
           
-          setDream({
+          const dreamObj = {
             id: dreamDoc.id,
             title: dreamData.title,
             content: dreamData.content,
@@ -116,7 +89,10 @@ const DreamDetail = () => {
             userUsername: dreamData.userUsername || null,
             likes: dreamData.likes || 0,
             comments: dreamData.comments || 0
-          });
+          };
+          
+          setDream(dreamObj);
+          setLikeCount(dreamObj.likes);
           
           // Set up comments listener
           const commentsQuery = query(
@@ -152,6 +128,27 @@ const DreamDetail = () => {
         setLoading(false);
       }
     };
+
+    fetchDreamAndComments();
+  }, [dreamId, navigate, currentUser]);
+
+  const handleLike = () => {
+    setLiked((v) => !v);
+    setLikeCount((c) => liked ? c - 1 : c + 1);
+    // TODO: Backend ile entegre etmek için buraya API çağrısı eklenebilir
+  };
+
+  const handleComment = () => {
+    setTimeout(() => {
+      commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
+  };
 
   const handleAddComment = async () => {
     if (!currentUser || !dreamId || !newComment.trim()) return;
@@ -210,10 +207,10 @@ const DreamDetail = () => {
         <Card className="overflow-hidden border border-border/50 bg-background/95 backdrop-blur-sm">
           <CardHeader className="p-6">
             <div className="flex items-center gap-3 mb-4">
-            <Avatar className="h-8 w-8">
-  <AvatarImage src={dream.userAvatar || undefined} />
-  <AvatarFallback>{dream.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
-</Avatar>
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={dream.userAvatar || undefined} />
+                <AvatarFallback>{dream.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
 
               <div className="flex flex-col">
                 <span className="text-sm font-medium">
@@ -320,6 +317,7 @@ const DreamDetail = () => {
           {currentUser && (
             <div className="flex gap-3">
               <Avatar className="h-10 w-10 mt-1">
+                <AvatarImage src={currentUser.photoURL || undefined} />
                 <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
@@ -355,9 +353,8 @@ const DreamDetail = () => {
                   <CardContent className="p-4">
                     <div className="flex gap-3 items-start">
                       <Avatar className="h-8 w-8">
-                        <>
-                          <AvatarImage src={comment.userAvatar || undefined} />
-                          <AvatarFallback>{comment.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        <AvatarImage src={comment.userAvatar || undefined} />
+                        <AvatarFallback>{comment.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex justify-between items-center">
@@ -383,70 +380,4 @@ const DreamDetail = () => {
 };
 
 export default DreamDetail;
-
-const fetchDreamAndComments = async () => {
-  if (!dreamId) return;
-
-  try {
-    const dreamDocRef = doc(db, "dreams", dreamId);
-    const dreamDoc = await getDoc(dreamDocRef);
-
-    if (dreamDoc.exists()) {
-      const dreamData = dreamDoc.data();
-
-      // Check if the dream is private and user is not the owner
-      if (dreamData.isPrivate && dreamData.userId !== currentUser?.uid) {
-        toast.error("Bu rüya özel olarak ayarlanmış.", { position: 'top-center' });
-        setLoading(false);
-        return;
-      }
-
-      setDream({
-        id: dreamDoc.id,
-        title: dreamData.title,
-        content: dreamData.content,
-        createdAt: new Date(dreamData.createdAt.toDate()).toLocaleDateString("tr-TR"),
-        isPrivate: dreamData.isPrivate,
-        userId: dreamData.userId,
-        userName: dreamData.userName,
-        userAvatar: dreamData.userAvatar,
-        userUsername: dreamData.userUsername || null,
-        likes: dreamData.likes || 0,
-        comments: dreamData.comments || 0
-      });
-
-      // Set up comments listener
-      const commentsQuery = query(
-        collection(db, "comments"),
-        where("dreamId", "==", dreamId),
-        orderBy("createdAt", "desc")
-      );
-
-      const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
-        const commentsData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            text: data.text,
-            createdAt: new Date(data.createdAt.toDate()).toLocaleDateString("tr-TR"),
-            userId: data.userId,
-            userName: data.userName,
-            userAvatar: data.userAvatar
-          };
-        });
-
-        setComments(commentsData);
-      });
-
-      return unsubscribe;
-    } else {
-      toast.error("Rüya bulunamadı.", { position: 'top-center' });
-    }
-  } catch (error) {
-    console.error("Dream fetch error:", error);
-    toast.error("Rüya yüklenirken bir hata oluştu.", { position: 'top-center' });
-  } finally {
-    setLoading(false);
-  }
-};
 
