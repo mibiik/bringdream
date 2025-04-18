@@ -25,7 +25,7 @@ const messages = [
 
 export const ChatPanel: React.FC = () => {
   return (
-    <section className="flex flex-col flex-1 h-full bg-white dark:bg-neutral-950">
+    <section className="flex flex-col flex-1 h-full bg-white dark:bg-neutral-950 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-800">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">D</div>
@@ -38,7 +38,7 @@ export const ChatPanel: React.FC = () => {
         </button>
       </div>
       {/* Mesajlar */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3 scroll-smooth" style={{height: 'calc(100vh - 160px)'}}>
         {messages.map((msg) => (
           <div
             key={msg.id}

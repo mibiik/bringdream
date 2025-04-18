@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,9 @@ import { doc, getDoc, updateDoc, setDoc, getDocs, collection, query, where } fro
 import { db } from "@/lib/firebase";
 import { toast } from "@/components/ui/sonner";
 import { logoutUser } from "@/lib/firebase";
-import { useRef } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { storage } from "@/lib/firebase";
+import { ExtendedProfileForm } from "@/components/extended-profile-form";
 
 interface UserProfile {
   displayName: string;
@@ -24,6 +24,7 @@ interface UserProfile {
   dreamCount: number;
   followerCount: number;
   followingCount: number;
+  profileCompleted?: boolean;
 }
 
 function validateUsername(username: string): string | null {
@@ -43,6 +44,7 @@ const Profile = () => {
   const [bio, setBio] = useState("");
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [photoFile, setPhotoFile] = useState<File|null>(null);
+  const [showExtendedForm, setShowExtendedForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,8 +62,12 @@ const Profile = () => {
             photoURL: userData.photoURL,
             dreamCount: userData.dreamCount || 0,
             followerCount: userData.followerCount || 0,
-            followingCount: userData.followingCount || 0
+            followingCount: userData.followingCount || 0,
+            profileCompleted: userData.profileCompleted || false
           });
+          if (!userData.profileCompleted) {
+            setShowExtendedForm(true);
+          }
           setDisplayName(userData.displayName || "");
           setUsername(userData.username || "");
           setBio(userData.bio || "");
@@ -160,27 +166,39 @@ const Profile = () => {
     }
   };
 
+  const handleProfileComplete = () => {
+    setShowExtendedForm(false);
+    setProfile(prev => prev ? { ...prev, profileCompleted: true } : null);
+  };
+
   return (
     <DashboardLayout>
       <div className="w-full max-w-md mx-auto px-2 md:px-0 py-8 flex flex-col gap-6">
-        {/* Çıkış butonu minimalist, sağ üstte, sadece ikon */}
-        {currentUser && (
-          <button
-            onClick={handleLogout}
-            className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-red-50 transition"
-            title="Çıkış Yap"
-            aria-label="Çıkış Yap"
-          >
-            <LogOut className="h-5 w-5 text-red-400" />
-          </button>
-        )}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+        {showExtendedForm && currentUser ? (
+          <ExtendedProfileForm
+            userId={currentUser.uid}
+            onComplete={handleProfileComplete}
+          />
         ) : (
-          <section className="bg-white/90 shadow-xl rounded-2xl p-6 flex flex-col items-center gap-6 border border-gray-100">
-            {/* Profil Fotoğrafı */}
+          <>
+            {/* Çıkış butonu minimalist, sağ üstte, sadece ikon */}
+            {currentUser && (
+              <button
+                onClick={handleLogout}
+                className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-red-50 transition"
+                title="Çıkış Yap"
+                aria-label="Çıkış Yap"
+              >
+                <LogOut className="h-5 w-5 text-red-400" />
+              </button>
+            )}
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+                <section className="bg-white/90 shadow-xl rounded-2xl p-6 flex flex-col items-center gap-6 border border-gray-100">
+                  {/* Profil Fotoğrafı */}
             <div className="relative">
               <Avatar className="h-24 w-24 md:h-28 md:w-28 border-2 border-primary/20 shadow-sm">
                 <AvatarImage src={profile?.photoURL || undefined} />
@@ -269,11 +287,13 @@ const Profile = () => {
                 </form>
               )}
             </div>
-          </section>
-        )}
-      </div>
-    </DashboardLayout>
-  );
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      </DashboardLayout>
+    );
 };
 
 export default Profile;

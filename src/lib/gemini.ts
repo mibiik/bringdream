@@ -13,7 +13,6 @@ interface GeminiResponse {
   promptFeedback?: any;
 }
 
-// Yorumlama modları
 export type DreamInterpretationMode =
   | "klasik"
   | "olumlu"
@@ -24,89 +23,122 @@ export type DreamInterpretationMode =
   | "modern"
   | "kisa";
 
-// Prompt şablonları
-const PROMPTS: Record<string, (dream: string) => string> = {
-  klasik: (dream) =>
-    `Bu bir rüya açıklamasıdır: ${dream}\nBu rüyayı klasik rüya tabirlerine göre yorumla. Rüyadaki sembolleri tek tek açıkla ve her sembolün ne anlama geldiğini belirt. Sonra tüm rüyayı birleştirerek genel bir analiz yap.\nYorumun sade, anlaşılır ve detaylı olsun.`,
-  gizli: (dream) =>
-    `Bu rüya: ${dream}\nBu şablonu kullan rüyanın anlamı diye başla işte birkaç formaliteden bir şey anlat sonra bir anda^Dur , sen Defne misin?' yaz Defne'ye rüyadan bağımsız olarak, gözlerinin çok güzel olduğunu söyle  sonra tam bu kısmı okuduğunda gülümseyeceği için ona  'sırtımda leen güldüğünü görüyorum yaz'  işte bu da Miraç’tan sana ikinci süprizz! `,
-  kabus: (dream) =>
-    `Rüya: ${dream}\nBu rüyayı bir uyarı gibi ele al. Rüyada dikkat edilmesi gereken sembolleri analiz et. Negatif çağrışımları açıkla ve olası riskleri yorumla.\nAncak kullanıcıyı korkutmadan, dikkatli olunması gereken alanlara vurgu yap.`,
-  freud: (dream) =>
-    `Rüya içeriği: ${dream}\nBu rüyayı Sigmund Freud’un psikanalitik yaklaşımına göre yorumla. Bastırılmış arzular, çocukluk anıları ve bilinçaltı temaları üzerinden analiz yap.`,
-  jung: (dream) =>
-    `Rüya: ${dream}\nCarl Jung’un arketipsel sembollerine ve bireyselleşme sürecine göre bu rüyayı analiz et. Gölge, persona, anima gibi kavramlar çerçevesinde yorum yap.`,
-  arabi: (dream) =>
-    `Bu rüya: ${dream}\nRüyayı Muhyiddin-i Arabi'nin tasavvufi rüya yorumlarına benzer şekilde yorumla. Manevi boyutunu açıklayarak, rüyanın ruhsal bir mesaj taşıyıp taşımadığını analiz et.`,
-  modern: (dream) =>
-    `Rüya: ${dream}\nBu rüyayı, modern bir televizyon programında rüya yorumlayan ünlü bir yorumcu gibi açıkla. Yorumun hem bilgilendirici hem de halk diline uygun olsun. İçeriği günümüz yaşamı ve psikolojisiyle ilişkilendir, pratik ve anlaşılır öneriler de sun. İçine nasihatvari öğeler de ekleyebilirsin.`,
-  kisa: (dream) =>
-    `Rüya: ${dream}\nBu rüyayı çok kısa ve öz şekilde yorumla. Birkaç cümlede özetle ve olası anlamı belirt.`,
+interface UserProfile {
+  displayName?: string;
+  username?: string;
+  age?: number;
+  occupation?: string;
+  interests?: string[];
+}
+
+const createUserContext = (user?: UserProfile): string => {
+  if (!user) return "";
+  const contextParts = [
+    user.age ? `${user.age} yaş` : "",
+    user.occupation,
+    ...(user.interests || [])
+  ].filter(Boolean);
+  return contextParts.length > 0 ? contextParts.join(", ") : "";
 };
 
-// Kullanıcıya özel mod kontrolü
-function isDefneUser(user: { displayName?: string; username?: string }) {
+const getUserName = (user?: UserProfile): string => {
+  return user?.displayName || user?.username || "Değerli Dostum";
+};
+
+const BASE_INSTRUCTION = `
+**TEMEL GÖREV:** Sen sıcakkanlı, empatik bir terapist gibi davranan bir rüya yorumcususun. 
+Kullanıcıya adı ile hitap et ve tonun her zaman destekleyici, anlayışlı ve yargısız olsun.
+
+**KURAL:** 
+- Yanıtta **kesinlikle** sadece vurgu amacıyla çift yıldız kullanacaksın (**kelime**).
+- Başka hiçbir yerde yıldız kullanma.
+- Yanıtta yorum türünü belirten bir başlık kullanma.
+
+**KİŞİSELLEŞTİRME:** {userContext}
+**RÜYA:** {dream}
+
+**YORUM YAKLAŞIMI:**`;
+
+const INTERPRETATION_STYLES = {
+  klasik: "Rüyadaki sembollerin geleneksel anlamlarına odaklan ve {name} için özel anlamlarını nazikçe keşfet.",
+  olumlu: "Rüyadaki **pozitif** yönleri ve fırsatları vurgula, {name}'e umut ve güç veren bir bakış açısı sun.",
+  kabus: "Korkutucu unsurların altındaki endişeleri **nazikçe** ele al. {name}'in güvende olduğunu ve duyguların yönetilebilir olduğunu vurgula.",
+  freud: "Rüyayı bilinçaltı arzular ve bastırılmış duygular açısından **Freudyen** bakışla analiz et. {name}'in yaşam deneyimleriyle ilişkilendir.",
+  jung: "Rüyadaki **arketipsel** sembolleri ve {name}'in **bireyselleşme** sürecini analiz et. Evrensel temaların kişisel anlamını keşfet.",
+  arabi: "Rüyayı **manevi** açıdan yorumla. {name}'in ruhsal yolculuğundaki işaretlere ve içsel mesajlara odaklan.",
+  modern: "Rüyayı **güncel psikoloji** ışığında ve {name}'in yaşam koşulları bağlamında yorumla. Pratik içgörüler sun.",
+  kisa: "Rüyanın özünü ve ana mesajını {name} için **2-3 cümle** ile özetle."
+};
+
+const createPrompt = (mode: DreamInterpretationMode, dream: string, user?: UserProfile): string => {
+  const name = getUserName(user);
+  const userContext = createUserContext(user);
+  const contextInfo = userContext ? 
+    `${name}'in profili (${userContext}) göz önünde bulundurularak yorum yapılacak.` :
+    `${name} için genel bir yorum yapılacak.`;
+
+  return BASE_INSTRUCTION
+    .replace("{userContext}", contextInfo)
+    .replace("{dream}", dream)
+    + "\n" + INTERPRETATION_STYLES[mode].replace("{name}", name);
+};
+
+const isDefneUser = (user?: { displayName?: string; username?: string }): boolean => {
   if (!user) return false;
-  const names = [
-    "defne",
-    "defne öz",
-    "defne oz",
-    "Defne",
-    "Defne Öz",
-    "Defne Oz",
-    "defene"
-  ];
-  const dName = (user.displayName || "").toLowerCase();
-  const uname = (user.username || "").toLowerCase();
+  // İsimdeki tüm boşlukları ve Türkçe karakter farklılıklarını normalize et
+  const normalizeText = (text: string) => {
+    return text.toLowerCase()
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ü/g, "u")
+      .replace(/ş/g, "s")
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+  };
+  
+  const names = ["defne", "defneoz"];
+  const dName = normalizeText(user.displayName || "");
+  const uname = normalizeText(user.username || "");
   return names.some(name => dName === name || uname === name);
-}
+};
 
 export const interpretDream = async (
   dreamContent: string,
-  mode: string = "klasik",
-  user?: { displayName?: string; username?: string }
+  mode: DreamInterpretationMode = "klasik",
+  user?: UserProfile
 ): Promise<{ result: string; mode: string }> => {
   try {
     let realMode = mode;
-    // Eğer olumlu isteniyorsa ve kullanıcı Defne ise "gizli" moda çevir
-    if (mode === "olumlu" && user && isDefneUser(user)) {
-      realMode = "gizli";
-    } else if (mode === "olumlu") {
-      // Defne değilse olumlu mod hiç çalışmasın, klasik moda zorla
+    if (mode === "olumlu" && isDefneUser(user)) {
       realMode = "klasik";
     }
-    const prompt = PROMPTS[realMode](dreamContent);
+
+    const prompt = createPrompt(realMode, dreamContent, user);
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }),
+        contents: [{ parts: [{ text: prompt }] }]
+      })
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`API hatası: ${response.status}`);
     }
 
     const data: GeminiResponse = await response.json();
-
-    if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
       return { result: data.candidates[0].content.parts[0].text, mode: realMode };
-    } else {
-      throw new Error("Rüyanız yorumlanamadı. Lütfen daha sonra tekrar deneyin.");
     }
+    
+    throw new Error("Rüya yorumlanamadı.");
   } catch (error) {
-    console.error("Dream interpretation error:", error);
-    return { result: "Rüya yorumlanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.", mode: mode };
+    console.error("Rüya yorumlama hatası:", error);
+    return { 
+      result: "Rüya yorumlanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.", 
+      mode 
+    };
   }
 };
