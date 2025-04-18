@@ -7,6 +7,7 @@ import { Cloud } from "@/components/Cloud";
 import { Moon } from "@/components/Moon";
 import NotificationBell from "@/components/notification";
 import { useEffect, useState, useRef } from "react";
+import { useLocalStorage } from "@/hooks/use-mobile";
 import { DreamCard } from "@/components/dream-card";
 import { collection, query, orderBy, getDocs, where, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -74,6 +75,8 @@ const stats = [
   { value: "25K+", label: "AI Yorumu" },
   { value: "4.8/5", label: "Kullanıcı Puanı" }
 ];
+
+const [dream, setDream] = useLocalStorage("currentDream", null);
 
 const ErrorBoundary = ({ children }: { children: React.ReactNode }) => {
   const [hasError, setHasError] = useState(false);
