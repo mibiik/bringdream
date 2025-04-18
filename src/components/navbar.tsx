@@ -11,12 +11,12 @@ export function Navbar() {
       </div>
       <div className="flex items-center gap-4">
         <Link to="/login">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="bg-blue-100 hover:bg-blue-900 text-blue-800">
             Giriş Yap
           </Button>
         </Link>
         <Link to="/register">
-          <Button variant="default" size="sm">
+          <Button variant="default" size="sm" className="navy-dark hover:bg-navy-dark text-white transition-all duration-300 hover:scale-105 hover:shadow-md">
             Kayıt Ol
           </Button>
         </Link>

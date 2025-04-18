@@ -24,10 +24,12 @@ const messages = [
 ];
 
 export const ChatPanel: React.FC = () => {
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  
   return (
     <section className="flex flex-col flex-1 h-full bg-white dark:bg-neutral-950">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+      <div className={`flex items-center gap-3 ${isMobile ? 'px-4 py-3' : 'px-6 py-4'} border-b border-gray-200 dark:border-gray-800`}>
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">D</div>
         <div className="flex-1">
           <div className="font-semibold text-gray-900 dark:text-gray-100">Defne Öz</div>
@@ -71,7 +73,7 @@ export const ChatPanel: React.FC = () => {
         ))}
       </div>
       {/* Mesaj Yazma Alanı */}
-      <form className="flex items-end gap-2 px-4 py-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-neutral-950">
+      <form className={`flex items-end gap-2 ${isMobile ? 'px-3 py-3' : 'px-4 py-4'} border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-neutral-950`}>
         <button type="button" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
           <Smile className="w-5 h-5 text-yellow-500" />
         </button>

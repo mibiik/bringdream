@@ -41,22 +41,7 @@ const NotificationBell: React.FC = () => {
         onClick={handleBellClick}
         style={{ background: 'none', border: 'none', cursor: 'pointer' }}
         aria-label="Bildirimler"
-      >
-        <span style={{ fontSize: 24 }}>🔔</span>
-        {hasUnread && !open && (
-          <span style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: 12,
-            height: 12,
-            background: 'red',
-            borderRadius: '50%',
-            display: 'inline-block',
-            border: '2px solid white',
-          }} />
-        )}
-      </button>
+      />
       {open && (
         <div style={{
           position: 'absolute',

@@ -125,6 +125,11 @@ const Index = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Invalid response format: expected JSON");
+        }
+        
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
           setDreamInterpretation(data.candidates[0].content.parts[0].text);
@@ -155,6 +160,11 @@ const Index = () => {
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Invalid response format: expected JSON");
         }
         
         const data = await response.json();
@@ -259,6 +269,43 @@ const Index = () => {
 
   const handleDeleteDream = (id) => {
     setMyDreams((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const fetchDailyInspiration = async () => {
+    try {
+      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: "Give me a daily inspirational quote about dreams in Turkish. Keep it short (1-2 sentences max)."
+            }]
+          }]
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Invalid response format: expected JSON");
+      }
+      
+      const data = await response.json();
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        setDailyInspiration(data.candidates[0].content.parts[0].text);
+      } else {
+        setDailyInspiration("Hayallerin sınırı yoktur, sadece senin cesaretin var.");
+      }
+    } catch (error) {
+      console.error("Daily inspiration fetch error:", error);
+      setDailyInspiration("Hayallerin sınırı yoktur, sadece senin cesaretin var.");
+    }
   };
 
   const handleRefreshDream = async () => {

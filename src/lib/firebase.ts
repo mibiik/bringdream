@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
@@ -45,6 +45,17 @@ export const registerUser = async (email: string, password: string) => {
     return userCredential.user;
   } catch (error: any) {
     console.error("Registration error:", error);
+    throw new Error(error.message);
+  }
+};
+
+export const signInWithGoogle = async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error: any) {
+    console.error("Google sign in error:", error);
     throw new Error(error.message);
   }
 };

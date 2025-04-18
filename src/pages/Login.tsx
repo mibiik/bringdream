@@ -90,6 +90,32 @@ const Login = () => {
                   "Giriş Yap"
                 )}
               </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    VEYA
+                  </span>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                className="w-full flex gap-2"
+                onClick={async () => {
+                  try {
+                    await signInWithGoogle();
+                    toast.success("Google ile başarıyla giriş yapıldı!");
+                    navigate("/dashboard");
+                  } catch (error) {
+                    toast.error("Google ile giriş yapılamadı");
+                  }
+                }}
+              >
+                <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4" />
+                Google ile Giriş Yap
+              </Button>
               <div className="text-sm text-center text-muted-foreground">
                 Hesabınız yok mu?{" "}
                 <Link to="/register" className="text-primary font-medium hover:underline">
