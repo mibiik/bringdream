@@ -76,38 +76,9 @@ const stats = [
   { value: "4.8/5", label: "Kullanıcı Puanı" }
 ];
 
-const [dream, setDream] = useLocalStorage("currentDream", null);
 
-const ErrorBoundary = ({ children }: { children: React.ReactNode }) => {
-  const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    const errorHandler = (error: Error) => {
-      console.error("Bileşen hatası:", error);
-      setHasError(true);
-    };
 
-    window.addEventListener("error", (event) => {
-      errorHandler(event.error);
-    });
-
-    return () => {
-      window.removeEventListener("error", (event) => {
-        errorHandler(event.error);
-      });
-    };
-  }, []);
-
-  if (hasError) {
-    return (
-      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
-        <p>Bir hata oluştu. Lütfen sayfayı yenileyin.</p>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-};
 
 const GEMINI_API_KEY = "AIzaSyC9s1KViXMx5ZQ-_GYcyKr0saBEs8ewpak";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
