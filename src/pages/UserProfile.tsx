@@ -120,9 +120,18 @@ const UserProfile = () => {
   }, [userId, currentUser]);
 
   const startConversation = () => {
-    if (!currentUser || !profileUid) return;
-    // Doğrudan contactId ile mesajlaşma sayfasına yönlendir
-    navigate(`/messages/${profileUid}`);
+    if (!currentUser || !profileUid || !userData) return;
+    navigate('/messages');
+    // Mesajlar sayfasına yönlendirdikten sonra seçili kullanıcıyı ayarla
+    setTimeout(() => {
+      const event = new CustomEvent('startChat', {
+        detail: {
+          userId: profileUid,
+          userName: userData.displayName
+        }
+      });
+      window.dispatchEvent(event);
+    }, 100);
   };
 
   // Takip/Çık fonksiyonları
@@ -235,13 +244,27 @@ const UserProfile = () => {
                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">@{userData?.username}</span>
               </h2>
               <div className="flex gap-6 py-2">
-                <button className="flex flex-col items-center group" onClick={fetchFollowers}>
-                  <span className="text-lg font-bold text-primary group-hover:underline">{userData?.followerCount ?? 0}</span>
-                  <span className="text-xs text-gray-400">Takipçi</span>
+                <button 
+                  className="flex flex-col items-center group transition-all hover:scale-105" 
+                  onClick={fetchFollowers}
+                >
+                  <span className="text-lg font-bold text-primary group-hover:underline">
+                    {userData?.followerCount ?? 0}
+                  </span>
+                  <span className="text-xs text-gray-400 group-hover:text-primary/80 transition-colors">
+                    Takipçi
+                  </span>
                 </button>
-                <button className="flex flex-col items-center group" onClick={fetchFollowing}>
-                  <span className="text-lg font-bold text-primary group-hover:underline">{userData?.followingCount ?? 0}</span>
-                  <span className="text-xs text-gray-400">Takip</span>
+                <button 
+                  className="flex flex-col items-center group transition-all hover:scale-105" 
+                  onClick={fetchFollowing}
+                >
+                  <span className="text-lg font-bold text-primary group-hover:underline">
+                    {userData?.followingCount ?? 0}
+                  </span>
+                  <span className="text-xs text-gray-400 group-hover:text-primary/80 transition-colors">
+                    Takip
+                  </span>
                 </button>
               </div>
               {/* Takip/Çık butonu (kendin değilse) */}

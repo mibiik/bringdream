@@ -7,12 +7,12 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import Messages from "./pages/Messages";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import CreateDream from "./pages/CreateDream";
 import DreamDetail from "./pages/DreamDetail";
 import Discover from "./pages/Discover";
-import Messages from "./pages/Messages";
 import EditDream from "./pages/EditDream";
 import UserProfile from "./pages/UserProfile";
 import About from "./pages/About";
@@ -47,12 +47,9 @@ const App = () => {
               <Route path="/dream/:dreamId" element={<DreamDetail />} />
               <Route path="/discover" element={<Discover />} />
               <Route path="/about" element={<About />} />
-              <Route path="/messages/:contactId" element={<Messages />} />
               <Route path="/messages" element={<Messages />} />
+              <Route path="/messages/:contactId" element={<Messages />} />
               <Route path="/editdream/:dreamId" element={<EditDream />} />
-              {/* CUSTOM CHAT LAYOUT ROUTE */}
-              <Route path="/chat" element={<ChatLayout />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

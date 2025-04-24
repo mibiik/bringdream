@@ -84,3 +84,5 @@ export const createFirestoreIndexes = async () => {
 };
 
 export { auth, db, storage };
+
+

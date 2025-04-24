@@ -101,18 +101,13 @@ const CreateDream = () => {
                     Bu rüyayı sadece ben görebilirim
                   </Label>
                 </div>
-                
-                {content.length > 10 && !showInterpretation && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowInterpretation(true)}
-                  >
-                    Rüyamı Yorumla
-                  </Button>
-                )}
               </div>
+
+              {content.length > 10 && (
+                <div className="mt-4">
+                  <DreamInterpretation dreamContent={content} />
+                </div>
+              )}
               
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? (

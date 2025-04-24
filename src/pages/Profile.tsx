@@ -1,299 +1,363 @@
-import { useEffect, useState, useRef } from "react";
-import { DashboardLayout } from "@/components/dashboard-layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, User, Edit2, LogOut } from "lucide-react";
-import { useAuth } from "@/components/auth-provider";
-import { doc, getDoc, updateDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { toast } from "@/components/ui/sonner";
-import { logoutUser } from "@/lib/firebase";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "@/lib/firebase";
-import { ExtendedProfileForm } from "@/components/extended-profile-form";
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/components/auth-provider';
+import { db, storage } from '@/lib/firebase'; // Removed updateUserProfile, uploadFile
+import { doc, onSnapshot, getDoc, collection, getDocs, updateDoc } from 'firebase/firestore'; // Added updateDoc
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Added storage functions
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent } from '@/components/ui/card';
+import { toast } from '@/components/ui/sonner';
+import { Camera, Edit2, UserCheck, UserPlus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { UserList } from '@/components/UserList'; // Assuming UserList can be adapted or a similar component exists
+import { UserType } from '@/types'; // Assuming a UserType definition exists
 
-interface UserProfile {
-  displayName: string;
+interface UserProfileData {
   username: string;
+  name: string;
   bio: string;
-  photoURL: string | null;
-  dreamCount: number;
-  followerCount: number;
+  avatar: string;
+  coverPhoto: string;
+  followersCount: number;
   followingCount: number;
-  profileCompleted?: boolean;
 }
 
-function validateUsername(username: string): string | null {
-  if (!username) return "Kullanıcı adı boş olamaz.";
-  if (!/^[a-z0-9_]{3,16}$/.test(username)) return "Kullanıcı adı 3-16 karakter, küçük harf, rakam ve alt çizgi içerebilir.";
-  return null;
-}
-
-const Profile = () => {
+export default function Profile() {
   const { currentUser } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [username, setUsername] = useState("");
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [bio, setBio] = useState("");
-  const [checkingUsername, setCheckingUsername] = useState(false);
-  const [photoFile, setPhotoFile] = useState<File|null>(null);
-  const [showExtendedForm, setShowExtendedForm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({ name: '', bio: '' });
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [followers, setFollowers] = useState<UserType[]>([]);
+  const [following, setFollowing] = useState<UserType[]>([]);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!currentUser) return;
-      try {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setProfile({
-            displayName: userData.displayName || "Kullanıcı",
-            username: userData.username || "",
-            bio: userData.bio || "",
-            photoURL: userData.photoURL,
-            dreamCount: userData.dreamCount || 0,
-            followerCount: userData.followerCount || 0,
-            followingCount: userData.followingCount || 0,
-            profileCompleted: userData.profileCompleted || false
-          });
-          if (!userData.profileCompleted) {
-            setShowExtendedForm(true);
-          }
-          setDisplayName(userData.displayName || "");
-          setUsername(userData.username || "");
-          setBio(userData.bio || "");
-        } else {
-          // Create default profile if it doesn't exist
-          const defaultProfile = {
-            displayName: currentUser.displayName || "Kullanıcı",
-            username: "",
-            email: currentUser.email,
-            bio: "",
-            photoURL: null,
-            createdAt: new Date(),
-            dreamCount: 0,
-            followerCount: 0,
-            followingCount: 0
-          };
-          await setDoc(userDocRef, defaultProfile);
-          setProfile(defaultProfile);
-          setDisplayName(defaultProfile.displayName);
-          setUsername(defaultProfile.username);
-        }
-      } catch (error) {
-        console.error("Profile fetch error:", error);
-        toast.error("Profil bilgileri yüklenirken bir hata oluştu.");
-      } finally {
-        setLoading(false);
+    if (!currentUser) return;
+
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    const unsubscribe = onSnapshot(userDocRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Fetch follower/following counts
+        const followersCol = collection(db, 'users', currentUser.uid, 'followers');
+        const followingCol = collection(db, 'users', currentUser.uid, 'following');
+        const followersSnap = await getDocs(followersCol);
+        const followingSnap = await getDocs(followingCol);
+
+        setProfileData({
+          username: data.username || '',
+          name: data.name || '',
+          bio: data.bio || '',
+          avatar: data.avatar || '/placeholder.svg',
+          coverPhoto: data.coverPhoto || '/placeholder.svg', // Add a default cover photo placeholder
+          followersCount: followersSnap.size,
+          followingCount: followingSnap.size,
+        });
+        setEditData({ name: data.name || '', bio: data.bio || '' });
+      } else {
+        console.log('No such document!');
       }
-    };
-    fetchProfile();
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [currentUser]);
 
-  // Kullanıcı adı değiştikçe benzersizliğini kontrol et
-  useEffect(() => {
-    if (!username) return;
-    setUsernameError(validateUsername(username));
-    if (validateUsername(username)) return;
-    setCheckingUsername(true);
-    const check = setTimeout(async () => {
-      // Aynı username başka biri tarafından alınmış mı?
-      const q = query(collection(db, "users"), where("username", "==", username));
-      const docs = await getDocs(q);
-      if (!docs.empty && docs.docs[0].id !== currentUser?.uid) setUsernameError("Bu kullanıcı adı alınmış.");
-      else setUsernameError(null);
-      setCheckingUsername(false);
-    }, 600);
-    return () => clearTimeout(check);
-  }, [username, currentUser]);
+  const handleEditToggle = () => {
+    setIsEditing(!isEditing);
+    if (!isEditing && profileData) {
+      // Reset edit fields if canceling
+      setEditData({ name: profileData.name, bio: profileData.bio });
+    }
+  };
 
-  const handleSaveProfile = async () => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfileSave = async () => {
     if (!currentUser) return;
-    if (usernameError) return toast.error(usernameError);
     setLoading(true);
     try {
-      const userDocRef = doc(db, "users", currentUser.uid);
-      await setDoc(userDocRef, {
-        displayName,
-        username,
-        bio
-      }, { merge: true });
-      setProfile(prev => prev ? { ...prev, displayName, username, bio } : prev);
-      toast.success("Profil başarıyla güncellendi.");
-      setEditing(false);
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userDocRef, { name: editData.name, bio: editData.bio }); // Use updateDoc
+      toast.success('Profil başarıyla güncellendi!');
+      setIsEditing(false);
     } catch (error) {
-      console.error("Profile update error:", error);
-      toast.error("Profil güncellenirken bir hata oluştu.");
+      console.error('Error updating profile:', error);
+      toast.error('Profil güncellenirken bir hata oluştu.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await logoutUser();
-      window.location.href = "/login";
-    } catch (error) {
-      toast.error("Çıkış yapılamadı. Lütfen tekrar deneyin.");
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
+    if (e.target.files && e.target.files[0]) {
+      if (type === 'profile') {
+        setProfileImageFile(e.target.files[0]);
+        handleImageUpload('profile', e.target.files[0]);
+      } else {
+        setCoverImageFile(e.target.files[0]);
+        handleImageUpload('cover', e.target.files[0]);
+      }
     }
   };
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
-    setPhotoFile(file);
-    setLoading(true);
+  const handleImageUpload = async (type: 'profile' | 'cover', file: File) => {
+    if (!currentUser || !file) return;
+
+    const uploader = type === 'profile' ? setUploadingProfile : setUploadingCover;
+    uploader(true);
+
     try {
-      const storageRef = ref(storage, `profile_photos/${currentUser.uid}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      await updateDoc(doc(db, "users", currentUser.uid), { photoURL: url });
-      setProfile((prev) => prev ? { ...prev, photoURL: url } : prev);
-      toast.success("Profil fotoğrafı güncellendi!");
+      const filePath = `user_images/${currentUser.uid}/${type === 'profile' ? 'avatar' : 'cover'}_${Date.now()}`;
+      const storageRef = ref(storage, filePath); // Create storage reference
+      await uploadBytes(storageRef, file); // Upload file
+      const downloadURL = await getDownloadURL(storageRef); // Get download URL
+
+      const updateData = type === 'profile' ? { avatar: downloadURL } : { coverPhoto: downloadURL };
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userDocRef, updateData); // Use updateDoc
+
+      setProfileData(prev => prev ? { ...prev, [type === 'profile' ? 'avatar' : 'coverPhoto']: downloadURL } : null);
+      toast.success(`${type === 'profile' ? 'Profil' : 'Kapak'} fotoğrafı başarıyla yüklendi!`);
+
+      // Reset file input
+      if (type === 'profile' && profileInputRef.current) profileInputRef.current.value = '';
+      if (type === 'cover' && coverInputRef.current) coverInputRef.current.value = '';
+      setProfileImageFile(null);
+      setCoverImageFile(null);
+
     } catch (error) {
-      toast.error("Fotoğraf yüklenemedi");
+      console.error(`Error uploading ${type} image:`, error);
+      toast.error(`${type === 'profile' ? 'Profil' : 'Kapak'} fotoğrafı yüklenirken bir hata oluştu.`);
     } finally {
-      setLoading(false);
+      uploader(false);
     }
   };
 
-  const handleProfileComplete = () => {
-    setShowExtendedForm(false);
-    setProfile(prev => prev ? { ...prev, profileCompleted: true } : null);
+  const fetchUsers = async (type: 'followers' | 'following') => {
+    if (!currentUser) return [];
+    const path = type === 'followers' ? 'followers' : 'following';
+    const colRef = collection(db, 'users', currentUser.uid, path);
+    const snapshot = await getDocs(colRef);
+    const userIds = snapshot.docs.map(doc => doc.id);
+
+    const usersData: UserType[] = [];
+    for (const userId of userIds) {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        usersData.push({ id: userDocSnap.id, ...userDocSnap.data() } as UserType);
+      }
+    }
+    return usersData;
   };
+
+  const openFollowersModal = async () => {
+    setLoading(true);
+    const users = await fetchUsers('followers');
+    setFollowers(users);
+    setShowFollowersModal(true);
+    setLoading(false);
+  };
+
+  const openFollowingModal = async () => {
+    setLoading(true);
+    const users = await fetchUsers('following');
+    setFollowing(users);
+    setShowFollowingModal(true);
+    setLoading(false);
+  };
+
+  if (loading && !profileData) {
+    return <DashboardLayout><div className="flex justify-center items-center h-screen">Yükleniyor...</div></DashboardLayout>;
+  }
+
+  if (!profileData) {
+    return <DashboardLayout><div className="flex justify-center items-center h-screen">Profil bilgileri yüklenemedi.</div></DashboardLayout>;
+  }
 
   return (
     <DashboardLayout>
-      <div className="w-full max-w-md mx-auto px-2 md:px-0 py-8 flex flex-col gap-6">
-        {showExtendedForm && currentUser ? (
-          <ExtendedProfileForm
-            userId={currentUser.uid}
-            onComplete={handleProfileComplete}
+      <Card className="overflow-hidden shadow-lg">
+        {/* Cover Photo */}
+        <div className="relative h-48 md:h-64 bg-gray-300">
+          <img
+            src={coverImageFile ? URL.createObjectURL(coverImageFile) : profileData.coverPhoto}
+            alt="Kapak Fotoğrafı"
+            className="w-full h-full object-cover"
           />
-        ) : (
-          <>
-            {/* Çıkış butonu minimalist, sağ üstte, sadece ikon */}
-            {currentUser && (
-              <button
-                onClick={handleLogout}
-                className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-red-50 transition"
-                title="Çıkış Yap"
-                aria-label="Çıkış Yap"
-              >
-                <LogOut className="h-5 w-5 text-red-400" />
-              </button>
-            )}
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-                <section className="bg-white/90 shadow-xl rounded-2xl p-6 flex flex-col items-center gap-6 border border-gray-100">
-                  {/* Profil Fotoğrafı */}
-            <div className="relative">
-              <Avatar className="h-24 w-24 md:h-28 md:w-28 border-2 border-primary/20 shadow-sm">
-                <AvatarImage src={profile?.photoURL || undefined} />
-                <AvatarFallback>{displayName.slice(0,2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-            </div>
-            {/* İsim ve Kullanıcı Adı */}
-            <div className="text-center flex flex-col gap-1">
-              <span className="text-xl font-semibold text-gray-900 tracking-tight">{profile?.displayName}</span>
-              <span className="text-sm text-gray-400 font-mono">@{profile?.username}</span>
-            </div>
-            {/* Bio */}
-            <p className="text-gray-600 text-sm text-center max-w-xs">
-              {profile?.bio || <span className="italic text-gray-300">Kendini tanıtarak topluluğa katıl!</span>}
-            </p>
-            {/* İstatistikler */}
-            <div className="flex justify-center gap-8 w-full">
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-primary">{profile?.dreamCount}</span>
-                <span className="text-xs text-gray-400">Rüya</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-primary">{profile?.followerCount}</span>
-                <span className="text-xs text-gray-400">Takipçi</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-primary">{profile?.followingCount}</span>
-                <span className="text-xs text-gray-400">Takip</span>
-              </div>
-            </div>
-            {/* Düzenle butonu minimalist */}
-            <div className="w-full flex justify-center">
-              {!editing ? (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="px-4 py-1 text-xs rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition font-medium"
-                >
-                  Profili Düzenle
-                </button>
-              ) : (
-                <form className="w-full flex flex-col gap-3" onSubmit={e => { e.preventDefault(); handleSaveProfile(); }}>
-                  <Input
-                    id="name"
-                    value={displayName}
-                    onChange={e => setDisplayName(e.target.value)}
-                    placeholder="İsminiz"
-                    className="text-center"
-                  />
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={e => setUsername(e.target.value.toLowerCase())}
-                    placeholder="kullaniciadi"
-                    maxLength={16}
-                    className="text-center"
-                  />
-                  {checkingUsername && <span className="text-xs text-blue-500 text-center">Kontrol ediliyor...</span>}
-                  {usernameError && <span className="text-xs text-red-500 text-center">{usernameError}</span>}
-                  <Textarea
-                    id="bio"
-                    value={bio}
-                    onChange={e => setBio(e.target.value)}
-                    placeholder="Kısa bir bio yazın"
-                    rows={2}
-                    className="text-center"
-                  />
-                  <div className="flex gap-2 mt-2 justify-center">
-                    <Button type="submit" disabled={loading || !!usernameError} size="sm" className="rounded-full px-4">
-                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Kaydet"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full px-4"
-                      onClick={() => {
-                        setEditing(false);
-                        setDisplayName(profile?.displayName || "");
-                        setUsername(profile?.username || "");
-                        setBio(profile?.bio || "");
-                      }}
-                    >
-                      İptal
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
-                </section>
-              )}
-            </>
-          )}
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute bottom-4 right-4 bg-white/80 hover:bg-white rounded-full"
+            onClick={() => coverInputRef.current?.click()}
+            disabled={uploadingCover}
+            title="Kapak Fotoğrafını Değiştir"
+          >
+            <Camera className="h-5 w-5" />
+          </Button>
+          <input
+            type="file"
+            accept="image/*"
+            ref={coverInputRef}
+            onChange={(e) => handleFileChange(e, 'cover')}
+            className="hidden"
+          />
+          {uploadingCover && <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white">Yükleniyor...</div>}
         </div>
-      </DashboardLayout>
-    );
-};
 
-export default Profile;
+        <CardContent className="relative p-6 pt-0">
+          {/* Profile Avatar */}
+          <div className="relative -mt-16 mb-4 inline-block">
+            <Avatar className="w-32 h-32 border-4 border-background shadow-md">
+              <AvatarImage src={profileImageFile ? URL.createObjectURL(profileImageFile) : profileData.avatar} alt={profileData.name} />
+              <AvatarFallback>{profileData.name?.charAt(0).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute bottom-1 right-1 bg-white/80 hover:bg-white rounded-full w-8 h-8"
+              onClick={() => profileInputRef.current?.click()}
+              disabled={uploadingProfile}
+              title="Profil Fotoğrafını Değiştir"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+            <input
+              type="file"
+              accept="image/*"
+              ref={profileInputRef}
+              onChange={(e) => handleFileChange(e, 'profile')}
+              className="hidden"
+            />
+             {uploadingProfile && <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white rounded-full text-xs">Yükleniyor...</div>}
+          </div>
+
+          {/* Edit Button */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute top-4 right-4"
+            onClick={handleEditToggle}
+          >
+            <Edit2 className="h-5 w-5" />
+          </Button>
+
+          {/* Profile Info */}
+          {isEditing ? (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">İsim</Label>
+                <Input id="name" name="name" value={editData.name} onChange={handleInputChange} />
+              </div>
+              <div>
+                <Label htmlFor="bio">Biyografi</Label>
+                <Textarea id="bio" name="bio" value={editData.bio} onChange={handleInputChange} />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleProfileSave} disabled={loading}>Kaydet</Button>
+                <Button variant="outline" onClick={handleEditToggle}>İptal</Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-bold">{profileData.name}</h1>
+              <p className="text-sm text-muted-foreground">@{profileData.username}</p>
+              <p className="mt-2 text-foreground/80">{profileData.bio || 'Henüz bir biyografi eklenmemiş.'}</p>
+            </div>
+          )}
+
+          {/* Follower/Following Stats */}
+          <div className="mt-6 flex space-x-6 border-t pt-4">
+            <Dialog open={showFollowersModal} onOpenChange={setShowFollowersModal}>
+              <DialogTrigger asChild>
+                <button onClick={openFollowersModal} className="text-center hover:underline" disabled={loading}>
+                  <span className="font-semibold block">{profileData.followersCount}</span>
+                  <span className="text-sm text-muted-foreground">Takipçi</span>
+                </button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Takipçiler</DialogTitle>
+                </DialogHeader>
+                {/* Adapt UserList or create a new component */} 
+                {/* <UserList users={followers} onSelectUser={() => {}} selectedUser={null} /> */}
+                <div className="max-h-96 overflow-y-auto">
+                  {followers.length > 0 ? followers.map(user => (
+                    <div key={user.id} className="flex items-center p-2 border-b last:border-b-0">
+                      <Avatar className="h-8 w-8 mr-2">
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                        <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span>{user.name} (@{user.username})</span>
+                    </div>
+                  )) : <p>Henüz takipçi yok.</p>}
+                </div>
+                 <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="secondary">Kapat</Button>
+                    </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showFollowingModal} onOpenChange={setShowFollowingModal}>
+              <DialogTrigger asChild>
+                <button onClick={openFollowingModal} className="text-center hover:underline" disabled={loading}>
+                  <span className="font-semibold block">{profileData.followingCount}</span>
+                  <span className="text-sm text-muted-foreground">Takip Edilen</span>
+                </button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Takip Edilenler</DialogTitle>
+                </DialogHeader>
+                 {/* <UserList users={following} onSelectUser={() => {}} selectedUser={null} /> */}
+                 <div className="max-h-96 overflow-y-auto">
+                  {following.length > 0 ? following.map(user => (
+                    <div key={user.id} className="flex items-center p-2 border-b last:border-b-0">
+                      <Avatar className="h-8 w-8 mr-2">
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                        <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span>{user.name} (@{user.username})</span>
+                      {/* Optional: Add unfollow button here */}
+                    </div>
+                  )) : <p>Henüz kimse takip edilmiyor.</p>}
+                </div>
+                 <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="secondary">Kapat</Button>
+                    </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Placeholder for user's dreams/posts */}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-4">Rüyalarım</h2>
+        {/* Add logic to fetch and display user's dreams here */}
+        <p className="text-muted-foreground">Henüz paylaşılan rüya yok.</p>
+      </div>
+    </DashboardLayout>
+  );
+}

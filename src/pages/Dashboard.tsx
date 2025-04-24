@@ -89,7 +89,7 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.map((dream) => (
                   <div key={dream.id}>
-                    <DreamCard dream={dream} />
+                    <DreamCard dream={dream} onDelete={(id) => setMyDreams(myDreams.filter(d => d.id !== id))} />
                   </div>
                 ))}
               </div>
@@ -109,7 +109,7 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.filter(d => !d.isPrivate).map((dream) => (
                   <div key={dream.id}>
-                    <DreamCard dream={dream} />
+                    <DreamCard dream={dream} onDelete={(id) => setMyDreams(myDreams.filter(d => d.id !== id))} />
                   </div>
                 ))}
               </div>
@@ -129,7 +129,7 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myDreams.filter(d => d.isPrivate).map((dream) => (
                   <div key={dream.id}>
-                    <DreamCard dream={dream} />
+                    <DreamCard dream={dream} onDelete={(id) => setMyDreams(myDreams.filter(d => d.id !== id))} />
                   </div>
                 ))}
               </div>

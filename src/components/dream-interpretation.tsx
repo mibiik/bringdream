@@ -37,7 +37,8 @@ export function DreamInterpretation({ dreamContent, commentCount }: DreamInterpr
     setLoading(true);
     try {
       const result = await interpretDream(dreamContent, mode);
-      setInterpretation(result);
+      // Ensure we're storing only the string result
+      setInterpretation(typeof result === 'object' ? result.result : result);
       showToast("Rüya başarıyla yorumlandı!");
     } catch (error) {
       console.error("Error interpreting dream:", error);
