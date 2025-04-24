@@ -307,7 +307,19 @@ const Messages = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                      <h3 className="font-medium text-lg">{selectedContact.displayName}</h3>
+                      <h3 className="font-medium text-lg">
+                        <span
+                          className="cursor-pointer hover:underline text-blue-700 dark:text-blue-300"
+                          onClick={() => {
+                            // username varsa username ile, yoksa id ile yönlendir
+                            if (selectedContact?.id) {
+                              window.location.href = `/profile/${selectedContact.id}`;
+                            }
+                          }}
+                        >
+                          {selectedContact.displayName}
+                        </span>
+                      </h3>
                       <p className="text-sm text-muted-foreground">Çevrimiçi</p>
                     </div>
                   </div>
